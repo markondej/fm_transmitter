@@ -33,6 +33,8 @@
 			<Add option="-fexceptions" />
 		</Compiler>
 		<Unit filename="main.cpp" />
+		<Unit filename="transmitter.cpp" />
+		<Unit filename="transmitter.h" />
 		<Extensions>
 			<envvars />
 			<code_completion />
