@@ -1,0 +1,14 @@
+# depslib dependency file v1.0
+1427756031 source:/home/pi/Projects/fm_transmitter/main.cpp
+	<iostream>
+	"transmitter.h"
+
+1427757326 /home/pi/Projects/fm_transmitter/transmitter.h
+
+1427756005 source:/home/pi/Projects/fm_transmitter/transmitter.cpp
+	"transmitter.h"
+	<sys/mman.h>
+	<fcntl.h>
+	<exception>
+	<iostream>
+
