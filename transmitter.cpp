@@ -4,8 +4,9 @@
 #include <exception>
 #include <iostream>
 
+#define REGISTER(base, offset) *(volatile int*)((int)base + offset);
 
-Transmitter::Transmitter()
+Transmitter::Transmitter(float frequency)
 {
     int memFd;
     if ((memFd = open("/dev/mem", O_RDWR | O_SYNC)) < 0) {
@@ -30,6 +31,11 @@ Transmitter::Transmitter()
     }
 
     clock = (volatile unsigned*)clockMap;
+
+    this->frequency = frequency;
+
+    REGISTER(gpio, 0x00) = (REGISTER(gpio, 0x00) & 0xFFF1FFFF) | 0xFFF3FFFF;
+
 }
 
 Transmitter::~Transmitter()

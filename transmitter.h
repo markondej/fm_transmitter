@@ -5,9 +5,10 @@
 class Transmitter
 {
     public:
-        Transmitter();
+        Transmitter(float frequency);
         virtual ~Transmitter();
     private:
+        float frequency;
         volatile unsigned *gpio;
         volatile unsigned *clock;
 };
