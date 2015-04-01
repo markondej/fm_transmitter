@@ -37,14 +37,15 @@ void Transmitter::transmit(std::vector<unsigned int> *freqDivs, unsigned int sam
     unsigned int start_usec = (unsigned int)time.tv_usec;
     unsigned int current_sec = 0, current_usec = 0;
 
-    unsigned int offset = 0, dataOffset;
+    unsigned int offset = 0, dataOffset, dataLength = freqDivs->size();
+    unsigned int *data = &(*freqDivs)[0];
 
     while (true) {
         dataOffset = (unsigned int)((unsigned long long)offset * (unsigned long long)sampleRate / 1000000);
-        if (dataOffset >= freqDivs->size()) break;
-        ACCESS(peripherals, 0x00101074) = (0x5A << 24) | (unsigned int)freqDivs->at(dataOffset);
+        if (dataOffset >= dataLength) break;
+        ACCESS(peripherals, 0x00101074) = (0x5A << 24) | data[dataOffset];
 
-        usleep(10);
+        usleep(15);
 
         gettimeofday(&time, NULL);
         current_sec = (unsigned int)time.tv_sec;
