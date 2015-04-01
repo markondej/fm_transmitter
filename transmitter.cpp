@@ -38,7 +38,7 @@ void Transmitter::transmit(std::vector<unsigned int> *freqDivs, unsigned int sam
         if (offset >= length) break;
         ACCESS(peripherals, 0x00101074) = (0x5A << 24) | data[offset];
 
-        usleep(15);
+        usleep(10);
 
         current = ((unsigned long long)ACCESS(peripherals, 0x00003008) << 32) | ACCESS(peripherals, 0x00003004);
         offset = (unsigned int)((current - start) * (unsigned long long)sampleRate / 1000000);
