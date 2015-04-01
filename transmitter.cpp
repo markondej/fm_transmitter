@@ -1,44 +1,59 @@
 #include "transmitter.h"
+#include "pcm_wave_reader.h"
 #include <sys/mman.h>
+#include <sys/time.h>
 #include <fcntl.h>
 #include <exception>
 #include <iostream>
 
-#define REGISTER(base, offset) *(volatile int*)((int)base + offset);
+#define ACCESS(base, offset) *(volatile int*)((int)base + offset)
 
-Transmitter::Transmitter(float frequency)
+Transmitter::Transmitter(double frequency)
 {
     int memFd;
     if ((memFd = open("/dev/mem", O_RDWR | O_SYNC)) < 0) {
-        std::cout << "Sudo privileges are required!" << std::endl;
+        std::cout << "Sudo privileges are required" << std::endl;
         throw std::exception();
     }
 
-    void *gpioMap = mmap(NULL, 0xB1, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0x20200000);
-    if (gpioMap == MAP_FAILED) {
-        close(memFd);
-        std::cout << "MMAP error - " << (int)gpioMap << std::endl;
-        throw std::exception();
-    }
-
-    gpio = (volatile unsigned*)gpioMap;
-
-    void *clockMap = mmap(NULL, 0x12, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0x20101070);
+    void *peripheralsMap = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0x20000000);
     close(memFd);
-    if (clockMap == MAP_FAILED) {
-        std::cout << "MMAP error - " << (int)clockMap << std::endl;
+    if (peripheralsMap == MAP_FAILED) {
+        std::cout << "Cannot obtain access to peripherals (mmap error)" << std::endl;
         throw std::exception();
     }
 
-    clock = (volatile unsigned*)clockMap;
+    peripherals = (volatile unsigned*)peripheralsMap;
 
-    this->frequency = frequency;
+    ACCESS(peripherals, 0x00200000) = (ACCESS(peripherals, 0x00200000) & 0xFFFF8FFF) | (0x01 << 14);
+    ACCESS(peripherals, 0x00101070) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
+}
 
-    REGISTER(gpio, 0x00) = (REGISTER(gpio, 0x00) & 0xFFF1FFFF) | 0xFFF3FFFF;
+void Transmitter::transmit(std::vector<unsigned int> *freqDivs, unsigned int sampleRate) {
+    struct timeval time;
 
+    gettimeofday(&time, NULL);
+    unsigned int start_sec = (unsigned int)time.tv_sec;
+    unsigned int start_usec = (unsigned int)time.tv_usec;
+    unsigned int current_sec = 0, current_usec = 0;
+
+    unsigned int offset = 0, dataOffset;
+
+    while (true) {
+        dataOffset = (unsigned int)((unsigned long long)offset * (unsigned long long)sampleRate / 1000000);
+        if (dataOffset >= freqDivs->size()) break;
+        ACCESS(peripherals, 0x00101074) = (0x5A << 24) | (unsigned int)freqDivs->at(dataOffset);
+
+        usleep(10);
+
+        gettimeofday(&time, NULL);
+        current_sec = (unsigned int)time.tv_sec;
+        current_usec = (unsigned int)time.tv_usec;
+        offset = (current_sec - start_sec) * 1000000 + current_usec - start_usec;
+    }
 }
 
 Transmitter::~Transmitter()
 {
-    //dtor
+    ACCESS(peripherals, 0x00101070) = (0x5A << 24);
 }

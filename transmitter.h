@@ -1,16 +1,17 @@
 #ifndef TRANSMITTER_H
 #define TRANSMITTER_H
 
+#include <vector>
 
 class Transmitter
 {
     public:
-        Transmitter(float frequency);
+        Transmitter(double frequency);
         virtual ~Transmitter();
+        void transmit(std::vector<unsigned int> *freqDivs, unsigned int sampleRate);
     private:
-        float frequency;
-        volatile unsigned *gpio;
-        volatile unsigned *clock;
+        unsigned int minFreqDiv, maxFreqDiv;
+        volatile unsigned *peripherals;
 };
 
 #endif // TRANSMITTER_H
