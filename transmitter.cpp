@@ -1,5 +1,4 @@
 #include "transmitter.h"
-#include "pcm_wave_reader.h"
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <fcntl.h>

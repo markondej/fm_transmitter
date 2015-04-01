@@ -1,16 +1,15 @@
 # depslib dependency file v1.0
-1427846901 source:/home/pi/Projects/fm_transmitter/main.cpp
+1427891892 source:/home/pi/Projects/fm_transmitter/main.cpp
 	<stdlib.h>
 	<iostream>
-	"pcm_wave_reader.h"
+	"wave_reader.h"
 	"transmitter.h"
 
 1427846733 /home/pi/Projects/fm_transmitter/transmitter.h
 	<vector>
 
-1427846990 source:/home/pi/Projects/fm_transmitter/transmitter.cpp
+1427891891 source:/home/pi/Projects/fm_transmitter/transmitter.cpp
 	"transmitter.h"
-	"pcm_wave_reader.h"
 	<sys/mman.h>
 	<sys/time.h>
 	<fcntl.h>
@@ -26,6 +25,18 @@
 
 1427847773 source:/home/pi/Projects/fm_transmitter/pcm_wave_reader.cpp
 	"pcm_wave_reader.h"
+	<string.h>
+	<exception>
+	<iostream>
+	<fstream>
+
+1427891528 /home/pi/Projects/fm_transmitter/wave_reader.h
+	<string>
+	<vector>
+	"pcm_wave_header.h"
+
+1427891981 source:/home/pi/Projects/fm_transmitter/wave_reader.cpp
+	"wave_reader.h"
 	<string.h>
 	<exception>
 	<iostream>

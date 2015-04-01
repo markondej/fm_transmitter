@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <iostream>
-#include "pcm_wave_reader.h"
+#include "wave_reader.h"
 #include "transmitter.h"
 
 using namespace std;
@@ -15,7 +15,7 @@ int main(int argc, char **argv)
     string filename = argv[1];
     double frequency = (argc < 3) ? 100.0 : (::atof(argv[2]));
     try {
-        PCMWaveReader *reader = new PCMWaveReader(filename);
+        WaveReader *reader = new WaveReader(filename);
         Transmitter *transmitter = new Transmitter(frequency);
         PCMWaveHeader *header = reader->getHeader();
         std::vector<unsigned int> *freqDivs = reader->generateFreqDivs(frequency);
