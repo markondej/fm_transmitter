@@ -90,8 +90,9 @@ std::vector<unsigned int> *WaveReader::generateFreqDivs(double frequency)
 {
     std::vector<unsigned int> *freqDivs = new std::vector<unsigned int>();
     unsigned char frameSize = header.channels * (header.bitsPerSample >> 3);
-    unsigned int frameOffset, dataOffset, framesCount = header.subchunk2Size / frameSize;
-    unsigned int freqDiv; double channelWidth = 0.2; int base;
+    unsigned int frameOffset = 0, dataOffset, freqDiv;
+    unsigned int framesCount = header.subchunk2Size / frameSize;
+    double channelWidth = 0.2; int base;
 
     while (frameOffset < framesCount) {
         dataOffset = frameOffset * frameSize;
