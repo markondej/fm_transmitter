@@ -1,6 +1,5 @@
 #include "transmitter.h"
 #include <sys/mman.h>
-#include <sys/time.h>
 #include <fcntl.h>
 #include <exception>
 #include <iostream>
@@ -29,27 +28,20 @@ Transmitter::Transmitter(double frequency)
 }
 
 void Transmitter::transmit(std::vector<unsigned int> *freqDivs, unsigned int sampleRate) {
-    struct timeval time;
-
-    gettimeofday(&time, NULL);
-    unsigned int start_sec = (unsigned int)time.tv_sec;
-    unsigned int start_usec = (unsigned int)time.tv_usec;
-    unsigned int current_sec = 0, current_usec = 0;
-
-    unsigned int offset = 0, dataOffset, dataLength = freqDivs->size();
+    unsigned int offset = 0, length = freqDivs->size();
     unsigned int *data = &(*freqDivs)[0];
 
+    unsigned long long current = 0;
+    unsigned long long start = ((unsigned long long)ACCESS(peripherals, 0x00003008) << 32) | ACCESS(peripherals, 0x00003004);
+
     while (true) {
-        dataOffset = (unsigned int)((unsigned long long)offset * (unsigned long long)sampleRate / 1000000);
-        if (dataOffset >= dataLength) break;
-        ACCESS(peripherals, 0x00101074) = (0x5A << 24) | data[dataOffset];
+        if (offset >= length) break;
+        ACCESS(peripherals, 0x00101074) = (0x5A << 24) | data[offset];
 
         usleep(15);
 
-        gettimeofday(&time, NULL);
-        current_sec = (unsigned int)time.tv_sec;
-        current_usec = (unsigned int)time.tv_usec;
-        offset = (current_sec - start_sec) * 1000000 + current_usec - start_usec;
+        current = ((unsigned long long)ACCESS(peripherals, 0x00003008) << 32) | ACCESS(peripherals, 0x00003004);
+        offset = (unsigned int)((current - start) * (unsigned long long)sampleRate / 1000000);
     }
 }
 
