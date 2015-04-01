@@ -11,14 +11,14 @@ Transmitter::Transmitter(double frequency)
 {
     int memFd;
     if ((memFd = open("/dev/mem", O_RDWR | O_SYNC)) < 0) {
-        std::cout << "Sudo privileges are required" << std::endl;
+        std::cout << "Error: sudo privileges are required" << std::endl;
         throw std::exception();
     }
 
     void *peripheralsMap = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0x20000000);
     close(memFd);
     if (peripheralsMap == MAP_FAILED) {
-        std::cout << "Cannot obtain access to peripherals (mmap error)" << std::endl;
+        std::cout << "Error: cannot obtain access to peripherals (mmap error)" << std::endl;
         throw std::exception();
     }
 

@@ -13,7 +13,7 @@ WaveReader::WaveReader(std::string filename)
     std::ifstream is(filename.c_str(), std::ifstream::binary);
 
     if (!is) {
-        std::cout << "Cannot open '" << filename << "', file does not exist" << std::endl;
+        std::cout << "Error: cannot open '" << filename << "', file does not exist" << std::endl;
         throw std::exception();
     }
 
@@ -22,7 +22,7 @@ WaveReader::WaveReader(std::string filename)
     is.seekg(0, is.beg);
 
     if (length < sizeof(PCMWaveHeader)) {
-        std::cout << "Error while opening '" << filename << "', data corrupted" << std::endl;
+        std::cout << "Error: data corrupted" << std::endl;
         throw std::exception();
     }
 
@@ -33,12 +33,12 @@ WaveReader::WaveReader(std::string filename)
     memcpy(&header, &buffer[0], sizeof(PCMWaveHeader));
 
     if ((error = checkDataFormat(&header)) > 0) {
-        std::cout << "Error while opening '" << filename << "', unsupported data format (" << error << ")" << std::endl;
+        std::cout << "Error: unsupported data format (" << error << ")" << std::endl;
         throw std::exception();
     }
 
     if (length < sizeof(PCMWaveHeader) + header.subchunk2Size) {
-        std::cout << "Error while opening '" << filename << "', data corrupted" << std::endl;
+        std::cout << "Error: data corrupted" << std::endl;
         throw std::exception();
     }
 
