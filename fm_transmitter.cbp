@@ -34,10 +34,10 @@
 		</Compiler>
 		<Unit filename="main.cpp" />
 		<Unit filename="pcm_wave_header.h" />
-		<Unit filename="pcm_wave_reader.cpp" />
-		<Unit filename="pcm_wave_reader.h" />
 		<Unit filename="transmitter.cpp" />
 		<Unit filename="transmitter.h" />
+		<Unit filename="wave_reader.cpp" />
+		<Unit filename="wave_reader.h" />
 		<Extensions>
 			<envvars />
 			<code_completion />
