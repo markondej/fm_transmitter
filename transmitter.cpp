@@ -14,7 +14,7 @@ Transmitter::Transmitter(double frequency)
         throw std::exception();
     }
 
-    void *peripheralsMap = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0x20000000);
+    void *peripheralsMap = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0x3F000000);
     close(memFd);
     if (peripheralsMap == MAP_FAILED) {
         std::cout << "Error: cannot obtain access to peripherals (mmap error)" << std::endl;
