@@ -4,7 +4,8 @@
 #include <exception>
 #include <iostream>
 
-#define ACCESS(base, offset) *(volatile int*)((int)base + offset)
+#define ACCESS(base, offset) *(volatile unsigned int*)((int)base + offset)
+#define ACCESS64(base, offset) *(volatile unsigned long long*)((int)base + offset)
 
 Transmitter::Transmitter(double frequency)
 {
@@ -14,7 +15,7 @@ Transmitter::Transmitter(double frequency)
         throw std::exception();
     }
 
-    void *peripheralsMap = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0x3F000000);
+    void *peripheralsMap = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0x20000000);
     close(memFd);
     if (peripheralsMap == MAP_FAILED) {
         std::cout << "Error: cannot obtain access to peripherals (mmap error)" << std::endl;
@@ -32,7 +33,7 @@ void Transmitter::transmit(std::vector<unsigned int> *freqDivs, unsigned int sam
     unsigned int *data = &(*freqDivs)[0];
 
     unsigned long long current = 0;
-    unsigned long long start = ((unsigned long long)ACCESS(peripherals, 0x00003008) << 32) | ACCESS(peripherals, 0x00003004);
+    unsigned long long start = ACCESS64(peripherals, 0x00003004);
 
     while (true) {
         temp = offset;
@@ -43,8 +44,8 @@ void Transmitter::transmit(std::vector<unsigned int> *freqDivs, unsigned int sam
         while (temp == offset) {
             usleep(1);
 
-            current = ((unsigned long long)ACCESS(peripherals, 0x00003008) << 32) | ACCESS(peripherals, 0x00003004);
-            offset = (unsigned int)((current - start) * (unsigned long long)sampleRate / 1000000);
+            current = ACCESS64(peripherals, 0x00003004);
+            offset = (unsigned int)((current - start) * sampleRate / 1000000);
         }
     }
 }

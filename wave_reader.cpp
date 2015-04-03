@@ -37,6 +37,8 @@ WaveReader::WaveReader(std::string filename)
         throw std::exception();
     }
 
+    header.subchunk2Size = length - sizeof(PCMWaveHeader);
+
     if (length < sizeof(PCMWaveHeader) + header.subchunk2Size) {
         std::cout << "Error: data corrupted" << std::endl;
         throw std::exception();
@@ -79,9 +81,9 @@ int WaveReader::checkDataFormat(PCMWaveHeader *header)
     if (((header->bitsPerSample >> 3) != 1) && ((header->bitsPerSample >> 3) != 2)) {
         error |= (0x01 << 7);
     }
-    if (std::string(header->subchunk2ID, 4) != std::string("data")) {
+    /*if (std::string(header->subchunk2ID, 4) != std::string("data")) {
         error |= (0x01 << 8);
-    }
+    }*/
 
     return error;
 }
@@ -105,10 +107,10 @@ std::vector<unsigned int> *WaveReader::generateFreqDivs(double frequency)
         } else {
             if (header.bitsPerSample != 8) {
                 base = (int)((short)(((unsigned char)data[dataOffset + 1] << 8) | (unsigned char)data[dataOffset]));
-                freqDiv = (unsigned int)((double)(500 << 12) / (frequency + (double)base / (double)0x8000 * bandwidth * 0.5) + 0.5);
+                freqDiv = (unsigned int)((double)(500 << 12) / (frequency - (double)base / (double)0x8000 * bandwidth * 0.5) + 0.5);
             } else {
                 base = (int)((unsigned char)data[dataOffset]) - 0x7F;
-                freqDiv = (unsigned int)((double)(500 << 12) / (frequency + (double)base / (double)0x80 * bandwidth * 0.5) + 0.5);
+                freqDiv = (unsigned int)((double)(500 << 12) / (frequency - (double)base / (double)0x80 * bandwidth * 0.5) + 0.5);
             }
         }
         freqDivs->push_back(freqDiv);
