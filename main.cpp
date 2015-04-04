@@ -18,10 +18,10 @@ int main(int argc, char **argv)
         WaveReader *reader = new WaveReader(filename);
         Transmitter *transmitter = new Transmitter(frequency);
         PCMWaveHeader *header = reader->getHeader();
-        std::vector<unsigned int> *freqDivs = reader->generateFreqDivs(frequency);
-        transmitter->transmit(freqDivs, header->sampleRate);
-        delete freqDivs;
+        std::vector<float> *samples = reader->getSamples();
+        transmitter->transmit(samples, header->sampleRate);
         delete transmitter;
+        delete samples;
         delete reader;
     } catch (exception &e) {
         return 1;

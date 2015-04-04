@@ -15,7 +15,7 @@ Transmitter::Transmitter(double frequency)
         throw std::exception();
     }
 
-    void *peripheralsMap = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0x20000000);
+    void *peripheralsMap = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, 0x3F000000);
     close(memFd);
     if (peripheralsMap == MAP_FAILED) {
         std::cout << "Error: cannot obtain access to peripherals (mmap error)" << std::endl;
@@ -26,11 +26,13 @@ Transmitter::Transmitter(double frequency)
 
     ACCESS(peripherals, 0x00200000) = (ACCESS(peripherals, 0x00200000) & 0xFFFF8FFF) | (0x01 << 14);
     ACCESS(peripherals, 0x00101070) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
+
+    clockDivisor = (unsigned int)((500 << 12) / frequency + 0.5);
 }
 
-void Transmitter::transmit(std::vector<unsigned int> *freqDivs, unsigned int sampleRate) {
-    unsigned int offset = 0, length = freqDivs->size(), temp;
-    unsigned int *data = &(*freqDivs)[0];
+void Transmitter::transmit(std::vector<float> *samples, unsigned int sampleRate) {
+    unsigned int offset = 0, length = samples->size(), temp;
+    float *data = &(*samples)[0];
 
     unsigned long long current = 0;
     unsigned long long start = ACCESS64(peripherals, 0x00003004);
@@ -39,9 +41,9 @@ void Transmitter::transmit(std::vector<unsigned int> *freqDivs, unsigned int sam
         temp = offset;
         if (offset >= length) break;
 
-        ACCESS(peripherals, 0x00101074) = (0x5A << 24) | data[offset];
+        ACCESS(peripherals, 0x00101074) = (0x5A << 24) | (clockDivisor - (int)(data[offset] * 16));
 
-        while (temp == offset) {
+        while (temp >= offset) {
             usleep(1);
 
             current = ACCESS64(peripherals, 0x00003004);

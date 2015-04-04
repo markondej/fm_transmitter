@@ -3,6 +3,7 @@
 #include <exception>
 #include <iostream>
 #include <fstream>
+#include <math.h>
 
 WaveReader::WaveReader(std::string filename)
 {
@@ -36,8 +37,6 @@ WaveReader::WaveReader(std::string filename)
         std::cout << "Error: unsupported data format (" << error << ")" << std::endl;
         throw std::exception();
     }
-
-    header.subchunk2Size = length - sizeof(PCMWaveHeader);
 
     if (length < sizeof(PCMWaveHeader) + header.subchunk2Size) {
         std::cout << "Error: data corrupted" << std::endl;
@@ -81,42 +80,40 @@ int WaveReader::checkDataFormat(PCMWaveHeader *header)
     if (((header->bitsPerSample >> 3) != 1) && ((header->bitsPerSample >> 3) != 2)) {
         error |= (0x01 << 7);
     }
-    /*if (std::string(header->subchunk2ID, 4) != std::string("data")) {
+    if (std::string(header->subchunk2ID, 4) != std::string("data")) {
         error |= (0x01 << 8);
-    }*/
+    }
 
     return error;
 }
 
-std::vector<unsigned int> *WaveReader::generateFreqDivs(double frequency)
+std::vector<float> *WaveReader::getSamples()
 {
-    std::vector<unsigned int> *freqDivs = new std::vector<unsigned int>();
+    std::vector<float> *samples = new std::vector<float>();
     unsigned char frameSize = header.channels * (header.bitsPerSample >> 3);
-    unsigned int frameOffset = 0, dataOffset, freqDiv;
     unsigned int framesCount = header.subchunk2Size / frameSize;
-    double bandwidth = 0.1; int base;
+    unsigned int frameOffset = 0, dataOffset;
+
+
 
     while (frameOffset < framesCount) {
         dataOffset = frameOffset * frameSize;
         if (header.channels != 1) {
             if (header.bitsPerSample != 8) {
-                freqDiv = 0;
+                //samples->push_back((data[dataOffset + 1] + data[dataOffset + 1]) >> 1);
             } else {
-                freqDiv = 0;
+                //samples->push_back(((data[dataOffset + 1] + 0x80) + (data[dataOffset + 3] + 0x80)) >> 1);
             }
         } else {
             if (header.bitsPerSample != 8) {
-                base = (int)((short)(((unsigned char)data[dataOffset + 1] << 8) | (unsigned char)data[dataOffset]));
-                freqDiv = (unsigned int)((double)(500 << 12) / (frequency - (double)base / (double)0x8000 * bandwidth * 0.5) + 0.5);
+                samples->push_back((signed char)data[dataOffset + 1] / (float)0x80);
             } else {
-                base = (int)((unsigned char)data[dataOffset]) - 0x7F;
-                freqDiv = (unsigned int)((double)(500 << 12) / (frequency - (double)base / (double)0x80 * bandwidth * 0.5) + 0.5);
+                samples->push_back(data[dataOffset] / (float)0x80 - 1.0f);
             }
         }
-        freqDivs->push_back(freqDiv);
         frameOffset++;
     }
-    return freqDivs;
+    return samples;
 }
 
 PCMWaveHeader *WaveReader::getHeader()

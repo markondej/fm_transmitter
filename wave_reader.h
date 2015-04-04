@@ -11,7 +11,7 @@ class WaveReader
         WaveReader(std::string filename);
         virtual ~WaveReader();
         int checkDataFormat(PCMWaveHeader *header);
-        std::vector<unsigned int> *generateFreqDivs(double frequency);
+        std::vector<float> *getSamples();
         PCMWaveHeader *getHeader();
     private:
         PCMWaveHeader header;

@@ -32,6 +32,9 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
+		<Linker>
+			<Add library="m" />
+		</Linker>
 		<Unit filename="main.cpp" />
 		<Unit filename="pcm_wave_header.h" />
 		<Unit filename="transmitter.cpp" />

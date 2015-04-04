@@ -8,9 +8,9 @@ class Transmitter
     public:
         Transmitter(double frequency);
         virtual ~Transmitter();
-        void transmit(std::vector<unsigned int> *freqDivs, unsigned int sampleRate);
+        void transmit(std::vector<float> *samples, unsigned int sampleRate);
     private:
-        unsigned int minFreqDiv, maxFreqDiv;
+        unsigned int clockDivisor;
         volatile unsigned *peripherals;
 };
 
