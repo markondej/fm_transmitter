@@ -94,16 +94,10 @@ std::vector<float> *WaveReader::getSamples()
     unsigned int framesCount = header.subchunk2Size / frameSize;
     unsigned int frameOffset = 0, dataOffset;
 
-
-
     while (frameOffset < framesCount) {
         dataOffset = frameOffset * frameSize;
         if (header.channels != 1) {
-            if (header.bitsPerSample != 8) {
-                //samples->push_back((data[dataOffset + 1] + data[dataOffset + 1]) >> 1);
-            } else {
-                //samples->push_back(((data[dataOffset + 1] + 0x80) + (data[dataOffset + 3] + 0x80)) >> 1);
-            }
+            // TODO: Stereo to mono conversion
         } else {
             if (header.bitsPerSample != 8) {
                 samples->push_back((signed char)data[dataOffset + 1] / (float)0x80);

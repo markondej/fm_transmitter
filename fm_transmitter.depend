@@ -8,10 +8,11 @@
 1428103370 /home/pi/Projects/fm_transmitter/transmitter.h
 	<vector>
 
-1428107263 source:/home/pi/Projects/fm_transmitter/transmitter.cpp
+1435350499 source:/home/pi/Projects/fm_transmitter/transmitter.cpp
 	"transmitter.h"
 	<sys/mman.h>
 	<fcntl.h>
+	<math.h>
 	<exception>
 	<iostream>
 
@@ -34,7 +35,7 @@
 	<vector>
 	"pcm_wave_header.h"
 
-1428107349 source:/home/pi/Projects/fm_transmitter/wave_reader.cpp
+1435349161 source:/home/pi/Projects/fm_transmitter/wave_reader.cpp
 	"wave_reader.h"
 	<string.h>
 	<exception>

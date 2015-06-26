@@ -35,6 +35,7 @@
 		<Linker>
 			<Add library="m" />
 		</Linker>
+		<Unit filename="README.md" />
 		<Unit filename="main.cpp" />
 		<Unit filename="pcm_wave_header.h" />
 		<Unit filename="transmitter.cpp" />
