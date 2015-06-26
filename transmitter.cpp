@@ -42,7 +42,7 @@ void Transmitter::transmit(std::vector<float> *samples, unsigned int sampleRate)
         temp = offset;
         if (offset >= length) break;
 
-        ACCESS(peripherals, 0x00101074) = (0x5A << 24) | clockDivisor - (int)(round(data[offset] * 10.0));
+        ACCESS(peripherals, 0x00101074) = (0x5A << 24) | clockDivisor - (int)(round(data[offset] * 16.0));
 
         while (temp >= offset) {
             usleep(1);
