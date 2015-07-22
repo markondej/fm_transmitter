@@ -31,11 +31,16 @@
 		<Compiler>
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
+			<Add option="-fpermissive" />
 		</Compiler>
 		<Linker>
+			<Add library="pthread" />
 			<Add library="m" />
 		</Linker>
 		<Unit filename="README.md" />
+		<Unit filename="audio_format.h" />
+		<Unit filename="error_reporter.cpp" />
+		<Unit filename="error_reporter.h" />
 		<Unit filename="main.cpp" />
 		<Unit filename="pcm_wave_header.h" />
 		<Unit filename="transmitter.cpp" />

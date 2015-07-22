@@ -30,26 +30,19 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PCM_WAVE_HEADER_H
-#define PCM_WAVE_HEADER_H
+#ifndef ERROR_REPORTER_H
+#define ERROR_REPORTER_H
 
-#define WAVE_FORMAT_PCM 0x0001
+#include <string>
 
-struct PCMWaveHeader
+using std::string;
+
+class ErrorReporter
 {
-    char chunkID[4];
-    unsigned int chunkSize;
-    char format[4];
-    char subchunk1ID[4];
-    unsigned int subchunk1Size;
-    unsigned short audioFormat;
-    unsigned short channels;
-    unsigned int sampleRate;
-    unsigned int byteRate;
-    unsigned short blockAlign;
-    unsigned short bitsPerSample;
-    char subchunk2ID[4];
-    unsigned int subchunk2Size;
+    public:
+        static string getLastError();
+    protected:
+        static string errorMessage;
 };
 
-#endif // PCM_WAVE_HEADER
+#endif // ERROR_REPORTER_H

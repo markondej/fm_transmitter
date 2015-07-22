@@ -30,26 +30,14 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PCM_WAVE_HEADER_H
-#define PCM_WAVE_HEADER_H
+#ifndef AUDIO_FORMAT_H
+#define AUDIO_FORMAT_H
 
-#define WAVE_FORMAT_PCM 0x0001
-
-struct PCMWaveHeader
+struct AudioFormat
 {
-    char chunkID[4];
-    unsigned int chunkSize;
-    char format[4];
-    char subchunk1ID[4];
-    unsigned int subchunk1Size;
-    unsigned short audioFormat;
     unsigned short channels;
-    unsigned int sampleRate;
-    unsigned int byteRate;
-    unsigned short blockAlign;
     unsigned short bitsPerSample;
-    char subchunk2ID[4];
-    unsigned int subchunk2Size;
+    unsigned int sampleRate;
 };
 
-#endif // PCM_WAVE_HEADER
+#endif // AUDIO_FORMAT_H
