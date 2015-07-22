@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_layout_file>
 	<ActiveTarget name="Debug" />
-	<File name="README.md" open="1" top="0" tabpos="6">
+	<File name="README.md" open="1" top="1" tabpos="6">
 		<Cursor position="750" topLine="0" />
 	</File>
 	<File name="main.cpp" open="1" top="0" tabpos="4">
 		<Cursor position="151" topLine="0" />
 	</File>
-	<File name="transmitter.cpp" open="1" top="1" tabpos="2">
-		<Cursor position="2667" topLine="143" />
+	<File name="transmitter.cpp" open="1" top="0" tabpos="2">
+		<Cursor position="2480" topLine="174" />
 	</File>
 	<File name="transmitter.h" open="1" top="0" tabpos="3">
 		<Cursor position="209" topLine="0" />
 	</File>
 	<File name="wave_reader.cpp" open="1" top="0" tabpos="1">
-		<Cursor position="1768" topLine="9" />
+		<Cursor position="6374" topLine="142" />
 	</File>
 	<File name="wave_reader.h" open="1" top="0" tabpos="5">
 		<Cursor position="294" topLine="0" />

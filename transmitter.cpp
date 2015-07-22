@@ -115,7 +115,7 @@ void Transmitter::play()
 
     frameOffset = 0;
 
-    unsigned int bufferFrames = format.sampleRate * BUFFER_TIME / 100000;
+    unsigned int bufferFrames = (unsigned int)((unsigned long long)format.sampleRate * BUFFER_TIME / 1000000);
 
     buffer = waveReader->getFrames(bufferFrames, frameOffset);
 
@@ -130,6 +130,8 @@ void Transmitter::play()
         errorMessage = oss.str();
         throw exception();
     }
+
+    usleep(BUFFER_TIME / 2);
 
     while(!waveReader->isEnd()) {
         if (buffer == NULL) {

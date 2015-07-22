@@ -15,7 +15,7 @@ sudo ./fm_transmitter [filename] [frequency]
 
 Like:
 ```
-sudp ./fm_transmitter star_wars.wav 100.0
+sudo ./fm_transmitter star_wars.wav 100.0
 ```
 
 You can open WAVE files.

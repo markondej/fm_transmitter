@@ -36,7 +36,7 @@
 #include "wave_reader.h"
 #include "audio_format.h"
 
-#define BUFFER_TIME 100000
+#define BUFFER_TIME 1000000
 
 using std::string;
 
