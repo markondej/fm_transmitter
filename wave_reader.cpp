@@ -40,7 +40,7 @@
 using std::exception;
 using std::ostringstream;
 
-WaveReader::WaveReader(std::string filename) :
+WaveReader::WaveReader(string filename) :
     filename(filename)
 {
     char *headerData;
@@ -187,7 +187,11 @@ bool WaveReader::isEnd()
     return header.subchunk2Size + dataOffset - ifs.tellg() == 0;
 }
 
-PCMWaveHeader *WaveReader::getHeader()
+AudioFormat *WaveReader::getFormat()
 {
-    return &header;
+    AudioFormat *format = new AudioFormat;
+    format->channels = header.channels;
+    format->sampleRate = header.sampleRate;
+    format->bitsPerSample = header.bitsPerSample;
+    return format;
 }

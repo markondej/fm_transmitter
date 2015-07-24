@@ -34,7 +34,7 @@
 #define TRANSMITTER_H
 
 #include "wave_reader.h"
-#include "audio_format.h"
+#include "stdin_reader.h"
 
 #define BUFFER_TIME 1000000
 
@@ -49,8 +49,10 @@ class Transmitter : public ErrorReporter
         AudioFormat *getFormat();
         void play();
     private:
-        AudioFormat format;
+        bool readStdin;
+        AudioFormat *format;
         WaveReader *waveReader;
+        StdinReader *stdinReader;
         unsigned int clockDivisor;
         volatile unsigned *peripherals;
 

@@ -38,6 +38,7 @@
 #include <fstream>
 #include "error_reporter.h"
 #include "pcm_wave_header.h"
+#include "audio_format.h"
 
 using std::vector;
 using std::string;
@@ -49,7 +50,7 @@ class WaveReader : public ErrorReporter
         WaveReader(string filename);
         virtual ~WaveReader();
 
-        PCMWaveHeader *getHeader();
+        AudioFormat *getFormat();
         vector<float> *getFrames(unsigned int count, unsigned int offset);
         bool isEnd();
     private:

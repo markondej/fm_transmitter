@@ -49,7 +49,8 @@ bool Transmitter::isTransmitting = false;
 vector<float> *Transmitter::buffer = NULL;
 unsigned int Transmitter::frameOffset = 0;
 
-Transmitter::Transmitter(string filename, double frequency)
+Transmitter::Transmitter(string filename, double frequency) :
+    readStdin(filename == "-")
 {
     ostringstream oss;
     bool isBcm2835 = true;
@@ -87,11 +88,13 @@ Transmitter::Transmitter(string filename, double frequency)
 
     peripherals = (volatile unsigned*)peripheralsMap;
 
-    waveReader = new WaveReader(filename);
-
-    format.sampleRate = waveReader->getHeader()->sampleRate;
-    format.channels = waveReader->getHeader()->channels;
-    format.bitsPerSample = waveReader->getHeader()->bitsPerSample;
+    if (!readStdin) {
+        waveReader = new WaveReader(filename);
+        format = waveReader->getFormat();
+    } else {
+        stdinReader = new StdinReader();
+        format = stdinReader->getFormat();
+    }
 
     ACCESS(peripherals, 0x00200000) = (ACCESS(peripherals, 0x00200000) & 0xFFFF8FFF) | (0x01 << 14);
     ACCESS(peripherals, 0x00101070) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
@@ -115,12 +118,12 @@ void Transmitter::play()
 
     frameOffset = 0;
 
-    unsigned int bufferFrames = (unsigned int)((unsigned long long)format.sampleRate * BUFFER_TIME / 1000000);
+    unsigned int bufferFrames = (unsigned int)((unsigned long long)format->sampleRate * BUFFER_TIME / 1000000);
 
-    buffer = waveReader->getFrames(bufferFrames, frameOffset);
+    buffer = (!readStdin) ? waveReader->getFrames(bufferFrames, frameOffset) : stdinReader->getFrames(bufferFrames);
 
     void *params[3];
-    params[0] = &format.sampleRate;
+    params[0] = &format->sampleRate;
     params[1] = &clockDivisor;
     params[2] = peripherals;
 
@@ -133,9 +136,9 @@ void Transmitter::play()
 
     usleep(BUFFER_TIME / 2);
 
-    while(!waveReader->isEnd()) {
+    while(!readStdin && !waveReader->isEnd()) {
         if (buffer == NULL) {
-            buffer = waveReader->getFrames(bufferFrames, frameOffset + bufferFrames);
+            buffer = (!readStdin) ? waveReader->getFrames(bufferFrames, frameOffset + bufferFrames) : stdinReader->getFrames(bufferFrames);
         }
         usleep(BUFFER_TIME / 2);
     }
@@ -180,7 +183,7 @@ void Transmitter::transmit(void *params)
                 break;
             }
 
-            ACCESS(peripherals, 0x00101074) = (0x5A << 24) | clockDivisor - (int)(round(data[offset] * 16.0));
+            ACCESS(peripherals, 0x00101074) = (0x5A << 24) | (clockDivisor - (int)(round(data[offset] * 16.0)));
 
             while (temp >= offset) {
                 usleep(1);
@@ -200,11 +203,15 @@ Transmitter::~Transmitter()
 {
     ACCESS(peripherals, 0x00101070) = (0x5A << 24);
     munmap(peripherals, 0x002FFFFF);
-    peripherals = NULL;
-    delete waveReader;
+    if (!readStdin) {
+        delete waveReader;
+    } else {
+        delete stdinReader;
+    }
+    delete format;
 }
 
 AudioFormat *Transmitter::getFormat()
 {
-    return &format;
+    return format;
 }
