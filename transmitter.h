@@ -8,6 +8,7 @@
 
     Redistribution and use in source and binary forms, with or without modification, are
     permitted provided that the following conditions are met:
+
     1. Redistributions of source code must retain the above copyright notice, this list
     of conditions and the following disclaimer.
 
@@ -35,6 +36,7 @@
 
 #include "wave_reader.h"
 #include "stdin_reader.h"
+#include "error_reporter.h"
 
 #define BUFFER_TIME 1000000
 
@@ -46,21 +48,21 @@ class Transmitter : public ErrorReporter
         Transmitter(string filename, double frequency);
         virtual ~Transmitter();
 
-        AudioFormat *getFormat();
+        AudioFormat &getFormat();
         void play();
     private:
         bool readStdin;
-        AudioFormat *format;
+        AudioFormat format;
         WaveReader *waveReader;
         StdinReader *stdinReader;
         unsigned int clockDivisor;
         volatile unsigned *peripherals;
 
-        static vector<float> *buffer;
+        vector<float> *buffer;
+        unsigned int frameOffset;
         static bool isTransmitting;
-        static unsigned int frameOffset;
 
-        static void transmit(void *params);
+        void transmit(void*);
 };
 
 #endif // TRANSMITTER_H

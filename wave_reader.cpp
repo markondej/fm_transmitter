@@ -8,6 +8,7 @@
 
     Redistribution and use in source and binary forms, with or without modification, are
     permitted provided that the following conditions are met:
+
     1. Redistributions of source code must retain the above copyright notice, this list
     of conditions and the following disclaimer.
 
@@ -34,8 +35,6 @@
 #include <exception>
 #include <sstream>
 #include <string.h>
-
-#include <iostream>
 
 using std::exception;
 using std::ostringstream;
@@ -142,12 +141,11 @@ vector<char> *WaveReader::readData(unsigned int bytesToRead, bool closeFileOnExc
     return data;
 }
 
-vector<float> *WaveReader::getFrames(unsigned int count, unsigned int frameOffset) {
-    unsigned int bytesToRead, bytesLeft, bytesPerFrame, frameCount, offset;
+vector<float> *WaveReader::getFrames(unsigned int frameCount, unsigned int frameOffset) {
+    unsigned int bytesToRead, bytesLeft, bytesPerFrame, offset;
     vector<float> *frames = new vector<float>();
     vector<char> *data;
 
-    frameCount = count;
     bytesPerFrame = (header.bitsPerSample >> 3) * header.channels;
     bytesToRead = frameCount * bytesPerFrame;
     bytesLeft = header.subchunk2Size - frameOffset * bytesPerFrame;

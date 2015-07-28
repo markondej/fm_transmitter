@@ -1,22 +1,124 @@
+/*
+    fm_transmitter - use Raspberry Pi as FM transmitter
+
+    Copyright (c) 2015, Marcin Kondej
+    All rights reserved.
+
+    See https://github.com/markondej/fm_transmitter
+
+    Redistribution and use in source and binary forms, with or without modification, are
+    permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, this list
+    of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright notice, this
+    list of conditions and the following disclaimer in the documentation and/or other
+    materials provided with the distribution.
+
+    3. Neither the name of the copyright holder nor the names of its contributors may be
+    used to endorse or promote products derived from this software without specific
+    prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+    OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT
+    SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+    INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+    TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+    BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
+    WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include "stdin_reader.h"
+#include <exception>
+#include <sstream>
+#include <unistd.h>
+
+using std::exception;
+using std::ostringstream;
 
 StdinReader::StdinReader()
 {
-    //ctor
+    ostringstream oss;
+
+    doStop = false;
+
+    int returnCode = pthread_create(&thread, NULL, (volatile void*)(&this->readStdin), NULL);
+    if (returnCode) {
+        oss << "Cannot create new thread (code: " << returnCode << ")";
+        errorMessage = oss.str();
+        throw exception();
+    }
 }
 
 StdinReader::~StdinReader()
 {
-    //dtor
+    doStop = true;
+    pthread_join(thread, NULL);
 }
 
-vector<float> *StdinReader::getFrames(unsigned int count)
+StdinReader *StdinReader::getInstance()
 {
-    return new vector<float>();
+    static StdinReader instance;
+    return &instance;
+}
+
+void StdinReader::readStdin()
+{
+    char *readBuffer = new char[BUFFER_SIZE];
+    while(!doStop) {
+        int bytes = read(STDIN_FILENO, readBuffer, BUFFER_SIZE);
+        buffer.insert(buffer.end(), readBuffer, readBuffer + bytes);
+        usleep(1);
+    }
+}
+
+vector<float> *StdinReader::getFrames(unsigned int frameCount)
+{
+    unsigned int bytesToRead, bufferSize, bytesPerFrame, offset, zeroOffset, restBytes;
+    vector<float> *frames = new vector<float>();
+
+    bufferSize = buffer.size();
+    bytesPerFrame = (BITS_PER_SAMPLE >> 3) * CHANNELS;
+    bytesToRead = frameCount * bytesPerFrame;
+    restBytes = bufferSize % bytesPerFrame;
+
+    if (bytesToRead > bufferSize) {
+        bytesToRead = bufferSize - restBytes;
+        frameCount = bytesToRead / bytesPerFrame;
+    }
+
+    zeroOffset = bufferSize - bytesToRead - restBytes;
+
+    for (unsigned int i = 0; i < frameCount; i++) {
+        offset = zeroOffset + bytesPerFrame * i;
+        if (CHANNELS != 1) {
+            if (BITS_PER_SAMPLE != 8) {
+                frames->push_back(((int)(signed char)buffer[offset + 1] + (int)(signed char)buffer[offset + 3]) / (float)0x100);
+            } else {
+                frames->push_back(((int)buffer[offset] + (int)buffer[offset + 1]) / (float)0x100 - 1.0f);
+            }
+        } else {
+            if (BITS_PER_SAMPLE != 8) {
+                frames->push_back((signed char)buffer[offset + 1] / (float)0x80);
+            } else {
+                frames->push_back(buffer[offset] / (float)0x80 - 1.0f);
+            }
+        }
+    }
+
+    buffer.clear();
+
+    return frames;
 }
 
 AudioFormat *StdinReader::getFormat()
 {
     AudioFormat *format = new AudioFormat;
+    format->sampleRate = SAMPLE_RATE;
+    format->bitsPerSample = BITS_PER_SAMPLE;
+    format->channels = CHANNELS;
     return format;
 }

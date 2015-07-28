@@ -8,6 +8,7 @@
 
     Redistribution and use in source and binary forms, with or without modification, are
     permitted provided that the following conditions are met:
+
     1. Redistributions of source code must retain the above copyright notice, this list
     of conditions and the following disclaimer.
 
@@ -46,8 +47,6 @@ using std::ostringstream;
 #define ACCESS64(base, offset) *(volatile unsigned long long*)((int)base + offset)
 
 bool Transmitter::isTransmitting = false;
-vector<float> *Transmitter::buffer = NULL;
-unsigned int Transmitter::frameOffset = 0;
 
 Transmitter::Transmitter(string filename, double frequency) :
     readStdin(filename == "-")
@@ -88,16 +87,15 @@ Transmitter::Transmitter(string filename, double frequency) :
 
     peripherals = (volatile unsigned*)peripheralsMap;
 
+    AudioFormat *audioFormat;
     if (!readStdin) {
         waveReader = new WaveReader(filename);
-        format = waveReader->getFormat();
+        audioFormat = waveReader->getFormat();
     } else {
-        stdinReader = new StdinReader();
-        format = stdinReader->getFormat();
+        stdinReader = StdinReader::getInstance();
+        audioFormat = stdinReader->getFormat();
     }
-
-    ACCESS(peripherals, 0x00200000) = (ACCESS(peripherals, 0x00200000) & 0xFFFF8FFF) | (0x01 << 14);
-    ACCESS(peripherals, 0x00101070) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
+    format = *audioFormat;
 
     clockDivisor = (unsigned int)((500 << 12) / frequency + 0.5);
 }
@@ -112,22 +110,15 @@ void Transmitter::play()
         throw exception();
     }
 
+    frameOffset = 0;
     isTransmitting = true;
     pthread_t thread;
-    int returnCode;
 
-    frameOffset = 0;
-
-    unsigned int bufferFrames = (unsigned int)((unsigned long long)format->sampleRate * BUFFER_TIME / 1000000);
+    unsigned int bufferFrames = (unsigned int)((unsigned long long)format.sampleRate * BUFFER_TIME / 1000000);
 
     buffer = (!readStdin) ? waveReader->getFrames(bufferFrames, frameOffset) : stdinReader->getFrames(bufferFrames);
 
-    void *params[3];
-    params[0] = &format->sampleRate;
-    params[1] = &clockDivisor;
-    params[2] = peripherals;
-
-    returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, (void*)params);
+    int returnCode = pthread_create(&thread, NULL, (volatile void*)(&this->transmit), NULL);
     if (returnCode) {
         oss << "Cannot create new thread (code: " << returnCode << ")";
         errorMessage = oss.str();
@@ -147,16 +138,15 @@ void Transmitter::play()
     pthread_join(thread, NULL);
 }
 
-void Transmitter::transmit(void *params)
+void Transmitter::transmit(void*)
 {
     unsigned long long current, start, playbackStart;
     unsigned int offset = 0, length, temp;
     vector<float> *frames;
     float *data;
 
-    unsigned int sampleRate = *((unsigned int**)params)[0];
-    unsigned int clockDivisor = *((unsigned int**)params)[1];
-    volatile unsigned *peripherals = ((unsigned int**)params)[2];
+    ACCESS(peripherals, 0x00200000) = (ACCESS(peripherals, 0x00200000) & 0xFFFF8FFF) | (0x01 << 14);
+    ACCESS(peripherals, 0x00101070) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
 
     playbackStart = ACCESS64(peripherals, 0x00003004);
     current = playbackStart;
@@ -168,7 +158,7 @@ void Transmitter::transmit(void *params)
             current = ACCESS64(peripherals, 0x00003004);
         }
         frames = buffer;
-        frameOffset = (current - playbackStart) * sampleRate / 1000000;
+        frameOffset = (current - playbackStart) * format.sampleRate / 1000000;
         buffer = NULL;
 
         length = frames->size();
@@ -189,7 +179,7 @@ void Transmitter::transmit(void *params)
                 usleep(1);
 
                 current = ACCESS64(peripherals, 0x00003004);
-                offset = (current - start) * sampleRate / 1000000;
+                offset = (current - start) * format.sampleRate / 1000000;
             }
         }
 
@@ -197,21 +187,21 @@ void Transmitter::transmit(void *params)
 
         delete frames;
     }
+
+    ACCESS(peripherals, 0x00101070) = (0x5A << 24);
 }
 
 Transmitter::~Transmitter()
 {
-    ACCESS(peripherals, 0x00101070) = (0x5A << 24);
     munmap(peripherals, 0x002FFFFF);
     if (!readStdin) {
         delete waveReader;
     } else {
         delete stdinReader;
     }
-    delete format;
 }
 
-AudioFormat *Transmitter::getFormat()
+AudioFormat& Transmitter::getFormat()
 {
     return format;
 }

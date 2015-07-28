@@ -43,6 +43,8 @@
 		<Unit filename="error_reporter.h" />
 		<Unit filename="main.cpp" />
 		<Unit filename="pcm_wave_header.h" />
+		<Unit filename="stdin_reader.cpp" />
+		<Unit filename="stdin_reader.h" />
 		<Unit filename="transmitter.cpp" />
 		<Unit filename="transmitter.h" />
 		<Unit filename="wave_reader.cpp" />

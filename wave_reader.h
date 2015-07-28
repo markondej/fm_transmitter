@@ -8,6 +8,7 @@
 
     Redistribution and use in source and binary forms, with or without modification, are
     permitted provided that the following conditions are met:
+
     1. Redistributions of source code must retain the above copyright notice, this list
     of conditions and the following disclaimer.
 
@@ -36,9 +37,9 @@
 #include <string>
 #include <vector>
 #include <fstream>
-#include "error_reporter.h"
-#include "pcm_wave_header.h"
 #include "audio_format.h"
+#include "pcm_wave_header.h"
+#include "error_reporter.h"
 
 using std::vector;
 using std::string;
@@ -51,7 +52,7 @@ class WaveReader : public ErrorReporter
         virtual ~WaveReader();
 
         AudioFormat *getFormat();
-        vector<float> *getFrames(unsigned int count, unsigned int offset);
+        vector<float> *getFrames(unsigned int frameCount, unsigned int frameOffset);
         bool isEnd();
     private:
         string filename;

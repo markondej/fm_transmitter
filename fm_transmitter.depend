@@ -52,31 +52,33 @@
 1437597555 /home/pi/Projects/fm_transmitter/error_reporter.h
 	<string>
 
-1435357888 source:/home/marcin/Repozytoria/fm_transmitter/error_reporter.cpp
+1438083081 source:/home/marcin/Repozytoria/fm_transmitter/error_reporter.cpp
 	"error_reporter.h"
 
-1435358040 /home/marcin/Repozytoria/fm_transmitter/error_reporter.h
+1438083081 /home/marcin/Repozytoria/fm_transmitter/error_reporter.h
 	<string>
 
-1436380561 source:/home/marcin/Repozytoria/fm_transmitter/main.cpp
+1438083081 source:/home/marcin/Repozytoria/fm_transmitter/main.cpp
 	<iostream>
 	"transmitter.h"
 	<cstdlib>
 
-1436384608 /home/marcin/Repozytoria/fm_transmitter/transmitter.h
+1438084671 /home/marcin/Repozytoria/fm_transmitter/transmitter.h
 	"wave_reader.h"
-	"audio_format.h"
+	"stdin_reader.h"
+	"error_reporter.h"
 
-1436380561 /home/marcin/Repozytoria/fm_transmitter/wave_reader.h
+1438090504 /home/marcin/Repozytoria/fm_transmitter/wave_reader.h
 	<string>
 	<vector>
 	<fstream>
-	"error_reporter.h"
+	"audio_format.h"
 	"pcm_wave_header.h"
+	"error_reporter.h"
 
-1435355417 /home/marcin/Repozytoria/fm_transmitter/pcm_wave_header.h
+1438083081 /home/marcin/Repozytoria/fm_transmitter/pcm_wave_header.h
 
-1436384617 source:/home/marcin/Repozytoria/fm_transmitter/transmitter.cpp
+1438084940 source:/home/marcin/Repozytoria/fm_transmitter/transmitter.cpp
 	"transmitter.h"
 	<exception>
 	<sstream>
@@ -85,11 +87,10 @@
 	<unistd.h>
 	<sys/mman.h>
 	<fcntl.h>
-	<pthread.h>
 
-1435675612 /home/marcin/Repozytoria/fm_transmitter/audio_format.h
+1438083081 /home/marcin/Repozytoria/fm_transmitter/audio_format.h
 
-1436380561 source:/home/marcin/Repozytoria/fm_transmitter/wave_reader.cpp
+1438090504 source:/home/marcin/Repozytoria/fm_transmitter/wave_reader.cpp
 	"wave_reader.h"
 	<exception>
 	<sstream>
@@ -235,4 +236,16 @@
 
 1437741006 source:/home/pi/new_transmitter/stdin_reader.cpp
 	"stdin_reader.h"
+
+1438091088 /home/marcin/Repozytoria/fm_transmitter/stdin_reader.h
+	<vector>
+	<fcntl.h>
+	"audio_format.h"
+	"error_reporter.h"
+
+1438085397 source:/home/marcin/Repozytoria/fm_transmitter/stdin_reader.cpp
+	"stdin_reader.h"
+	<exception>
+	<sstream>
+	<unistd.h>
 
