@@ -62,7 +62,7 @@ class Transmitter : public ErrorReporter
         unsigned int frameOffset;
         static bool isTransmitting;
 
-        void transmit(void*);
+        static void transmit(void *params);
 };
 
 #endif // TRANSMITTER_H

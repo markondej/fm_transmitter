@@ -118,7 +118,14 @@ void Transmitter::play()
 
     buffer = (!readStdin) ? waveReader->getFrames(bufferFrames, frameOffset) : stdinReader->getFrames(bufferFrames);
 
-    int returnCode = pthread_create(&thread, NULL, (volatile void*)(&this->transmit), NULL);
+    void *params[3];
+    params[0] = &format.sampleRate;
+    params[1] = &clockDivisor;
+    params[2] = &frameOffset;
+    params[3] = peripherals;
+    params[4] = buffer;
+
+    int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, (void*)params);
     if (returnCode) {
         oss << "Cannot create new thread (code: " << returnCode << ")";
         errorMessage = oss.str();
@@ -138,12 +145,18 @@ void Transmitter::play()
     pthread_join(thread, NULL);
 }
 
-void Transmitter::transmit(void*)
+void Transmitter::transmit(void *params)
 {
     unsigned long long current, start, playbackStart;
     unsigned int offset = 0, length, temp;
     vector<float> *frames;
     float *data;
+
+    unsigned int sampleRate = *((unsigned int**)params)[0];
+    unsigned int clockDivisor = *((unsigned int**)params)[1];
+    unsigned int frameOffset = *((unsigned int**)params)[2];
+    volatile unsigned *peripherals = ((volatile unsigned**)params)[3];
+    vector<float> *buffer = ((vector<float>**)params)[4];
 
     ACCESS(peripherals, 0x00200000) = (ACCESS(peripherals, 0x00200000) & 0xFFFF8FFF) | (0x01 << 14);
     ACCESS(peripherals, 0x00101070) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
@@ -158,7 +171,7 @@ void Transmitter::transmit(void*)
             current = ACCESS64(peripherals, 0x00003004);
         }
         frames = buffer;
-        frameOffset = (current - playbackStart) * format.sampleRate / 1000000;
+        frameOffset = (current - playbackStart) * sampleRate / 1000000;
         buffer = NULL;
 
         length = frames->size();
@@ -179,7 +192,7 @@ void Transmitter::transmit(void*)
                 usleep(1);
 
                 current = ACCESS64(peripherals, 0x00003004);
-                offset = (current - start) * format.sampleRate / 1000000;
+                offset = (current - start) * sampleRate / 1000000;
             }
         }
 

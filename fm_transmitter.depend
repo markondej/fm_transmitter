@@ -1,12 +1,13 @@
 # depslib dependency file v1.0
-1437597555 source:/home/pi/Projects/fm_transmitter/main.cpp
+1438119936 source:/home/pi/Projects/fm_transmitter/main.cpp
 	<iostream>
 	"transmitter.h"
 	<cstdlib>
 
-1437598518 /home/pi/Projects/fm_transmitter/transmitter.h
+1438121340 /home/pi/Projects/fm_transmitter/transmitter.h
 	"wave_reader.h"
-	"audio_format.h"
+	"stdin_reader.h"
+	"error_reporter.h"
 
 1437599898 source:/home/pi/Projects/fm_transmitter/transmitter.cpp
 	"transmitter.h"
@@ -23,7 +24,7 @@
 	<vector>
 	"pcm_wave_header.h"
 
-1437597555 /home/pi/Projects/fm_transmitter/pcm_wave_header.h
+1438119936 /home/pi/Projects/fm_transmitter/pcm_wave_header.h
 
 1427847773 source:/home/pi/Projects/fm_transmitter/pcm_wave_reader.cpp
 	"pcm_wave_reader.h"
@@ -32,24 +33,24 @@
 	<iostream>
 	<fstream>
 
-1437597555 /home/pi/Projects/fm_transmitter/wave_reader.h
+1438119936 /home/pi/Projects/fm_transmitter/wave_reader.h
 	<string>
 	<vector>
 	<fstream>
-	"error_reporter.h"
+	"audio_format.h"
 	"pcm_wave_header.h"
+	"error_reporter.h"
 
-1437600033 source:/home/pi/Projects/fm_transmitter/wave_reader.cpp
+1438119936 source:/home/pi/Projects/fm_transmitter/wave_reader.cpp
 	"wave_reader.h"
 	<exception>
 	<sstream>
 	<string.h>
-	<iostream>
 
-1437597555 source:/home/pi/Projects/fm_transmitter/error_reporter.cpp
+1438119936 source:/home/pi/Projects/fm_transmitter/error_reporter.cpp
 	"error_reporter.h"
 
-1437597555 /home/pi/Projects/fm_transmitter/error_reporter.h
+1438119936 /home/pi/Projects/fm_transmitter/error_reporter.h
 	<string>
 
 1438083081 source:/home/marcin/Repozytoria/fm_transmitter/error_reporter.cpp
@@ -139,7 +140,7 @@
 	<sstream>
 	<string.h>
 
-1437597555 /home/pi/Projects/fm_transmitter/audio_format.h
+1438119936 /home/pi/Projects/fm_transmitter/audio_format.h
 
 1436392352 source:/home/pi/fm_transmitter/error_reporter.cpp
 	"error_reporter.h"
@@ -244,6 +245,18 @@
 	"error_reporter.h"
 
 1438085397 source:/home/marcin/Repozytoria/fm_transmitter/stdin_reader.cpp
+	"stdin_reader.h"
+	<exception>
+	<sstream>
+	<unistd.h>
+
+1438119936 /home/pi/Projects/fm_transmitter/stdin_reader.h
+	<vector>
+	<fcntl.h>
+	"audio_format.h"
+	"error_reporter.h"
+
+1438119936 source:/home/pi/Projects/fm_transmitter/stdin_reader.cpp
 	"stdin_reader.h"
 	<exception>
 	<sstream>
