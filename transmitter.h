@@ -55,13 +55,11 @@ class Transmitter : public ErrorReporter
         AudioFormat format;
         WaveReader *waveReader;
         StdinReader *stdinReader;
-        unsigned int clockDivisor;
+        unsigned int clockDivisor, frameOffset;
         volatile unsigned *peripherals;
-
         vector<float> *buffer;
-        unsigned int frameOffset;
-        static bool isTransmitting;
 
+        static bool isTransmitting;
         static void transmit(void *params);
 };
 

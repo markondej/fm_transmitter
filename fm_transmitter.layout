@@ -5,13 +5,13 @@
 		<Cursor position="897" topLine="0" />
 	</File>
 	<File name="main.cpp" open="1" top="0" tabpos="4">
-		<Cursor position="151" topLine="12" />
+		<Cursor position="151" topLine="0" />
 	</File>
 	<File name="transmitter.cpp" open="1" top="1" tabpos="2">
-		<Cursor position="6087" topLine="153" />
+		<Cursor position="5921" topLine="152" />
 	</File>
 	<File name="transmitter.h" open="1" top="0" tabpos="3">
-		<Cursor position="2072" topLine="29" />
+		<Cursor position="2353" topLine="29" />
 	</File>
 	<File name="wave_reader.cpp" open="1" top="0" tabpos="1">
 		<Cursor position="6374" topLine="142" />
