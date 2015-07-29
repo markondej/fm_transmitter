@@ -36,6 +36,8 @@
 #include <sstream>
 #include <unistd.h>
 
+#include <iostream>
+
 using std::exception;
 using std::ostringstream;
 
@@ -67,7 +69,6 @@ StdinReader::StdinReader()
 
 StdinReader::~StdinReader()
 {
-    doStop = true;
     pthread_join(thread, NULL);
 }
 
@@ -106,7 +107,7 @@ void StdinReader::readStdin(void *params)
 
 vector<float> *StdinReader::getFrames(unsigned int frameCount)
 {
-    unsigned int bytesToRead, bufferSize, bytesPerFrame, offset, zeroOffset, restBytes;
+    unsigned int bytesToRead, bufferSize, bytesPerFrame, offset;
     vector<float> *frames = new vector<float>();
 
     while (isReading) {
@@ -114,20 +115,17 @@ vector<float> *StdinReader::getFrames(unsigned int frameCount)
     }
     isPreparingFrames = true;
 
-    bufferSize = 0;
+    bufferSize = buffer.size();
     bytesPerFrame = (BITS_PER_SAMPLE >> 3) * CHANNELS;
     bytesToRead = frameCount * bytesPerFrame;
-    restBytes = bufferSize % bytesPerFrame;
 
     if (bytesToRead > bufferSize) {
-        bytesToRead = bufferSize - restBytes;
+        bytesToRead = bufferSize - bufferSize % bytesPerFrame;
         frameCount = bytesToRead / bytesPerFrame;
     }
 
-    zeroOffset = bufferSize - bytesToRead - restBytes;
-
     for (unsigned int i = 0; i < frameCount; i++) {
-        offset = zeroOffset + bytesPerFrame * i;
+        offset = bytesPerFrame * i;
         if (CHANNELS != 1) {
             if (BITS_PER_SAMPLE != 8) {
                 frames->push_back(((int)(signed char)buffer[offset + 1] + (int)(signed char)buffer[offset + 3]) / (float)0x100);
@@ -143,7 +141,7 @@ vector<float> *StdinReader::getFrames(unsigned int frameCount)
         }
     }
 
-    buffer.clear();
+    buffer.erase(buffer.begin(), buffer.begin() + bytesToRead);
     isPreparingFrames = false;
 
     return frames;
