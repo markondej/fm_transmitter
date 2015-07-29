@@ -43,21 +43,25 @@ StdinReader::StdinReader()
 {
     ostringstream oss;
 
-    doStop = false;
+    doStop = true;
     isPreparingFrames = false;
     isReading = false;
 
-    void *params[4];
-    params[0] = &buffer;
-    params[1] = &doStop;
-    params[2] = &isPreparingFrames;
-    params[3] = &isReading;
+    vector<void*> params;
+    params.push_back((void*)&buffer);
+    params.push_back((void*)&doStop);
+    params.push_back((void*)&isPreparingFrames);
+    params.push_back((void*)&isReading);
 
-    int returnCode = pthread_create(&thread, NULL, &StdinReader::readStdin, (void*)params);
+    int returnCode = pthread_create(&thread, NULL, &StdinReader::readStdin, (void*)&params);
     if (returnCode) {
         oss << "Cannot create new thread (code: " << returnCode << ")";
         errorMessage = oss.str();
         throw exception();
+    }
+
+    while (doStop) {
+        usleep(1);
     }
 }
 
@@ -75,22 +79,29 @@ StdinReader *StdinReader::getInstance()
 
 void StdinReader::readStdin(void *params)
 {
-    vector<char> *buffer = ((vector<char>**)params)[0];
-    bool *doStop = ((bool**)params)[1];
-    bool *isPreparingFrames = ((bool**)params)[2];
-    bool *isReading = ((bool**)params)[3];
+    vector<char> *buffer = (vector<char>*)(*((vector<void*>*)params))[0];
+    bool *doStop = (bool*)(*((vector<void*>*)params))[1];
+    bool *isPreparingFrames = (bool*)(*((vector<void*>*)params))[2];
+    bool *isReading = (bool*)(*((vector<void*>*)params))[3];
 
+    *doStop = false;
     char *readBuffer = new char[BUFFER_SIZE];
     while(!*doStop) {
+        *isReading = true;
+
         while (*isPreparingFrames) {
             usleep(1);
         }
-        *isReading = true;
+
         int bytes = read(STDIN_FILENO, readBuffer, BUFFER_SIZE);
         buffer->insert(buffer->end(), readBuffer, readBuffer + bytes);
-        usleep(1);
+
         *isReading = false;
+        usleep(1);
+
     }
+
+    delete readBuffer;
 }
 
 vector<float> *StdinReader::getFrames(unsigned int frameCount)
@@ -103,7 +114,7 @@ vector<float> *StdinReader::getFrames(unsigned int frameCount)
     }
     isPreparingFrames = true;
 
-    bufferSize = buffer.size();
+    bufferSize = 0;
     bytesPerFrame = (BITS_PER_SAMPLE >> 3) * CHANNELS;
     bytesToRead = frameCount * bytesPerFrame;
     restBytes = bufferSize % bytesPerFrame;

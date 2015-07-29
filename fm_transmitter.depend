@@ -64,7 +64,7 @@
 	"transmitter.h"
 	<cstdlib>
 
-1438084671 /home/marcin/Repozytoria/fm_transmitter/transmitter.h
+1438167987 /home/marcin/Repozytoria/fm_transmitter/transmitter.h
 	"wave_reader.h"
 	"stdin_reader.h"
 	"error_reporter.h"
@@ -79,7 +79,7 @@
 
 1438083081 /home/marcin/Repozytoria/fm_transmitter/pcm_wave_header.h
 
-1438084940 source:/home/marcin/Repozytoria/fm_transmitter/transmitter.cpp
+1438185774 source:/home/marcin/Repozytoria/fm_transmitter/transmitter.cpp
 	"transmitter.h"
 	<exception>
 	<sstream>
@@ -245,13 +245,13 @@
 	<unistd.h>
 	<iostream>
 
-1438091088 /home/marcin/Repozytoria/fm_transmitter/stdin_reader.h
+1438185129 /home/marcin/Repozytoria/fm_transmitter/stdin_reader.h
 	<vector>
 	<fcntl.h>
 	"audio_format.h"
 	"error_reporter.h"
 
-1438085397 source:/home/marcin/Repozytoria/fm_transmitter/stdin_reader.cpp
+1438185748 source:/home/marcin/Repozytoria/fm_transmitter/stdin_reader.cpp
 	"stdin_reader.h"
 	<exception>
 	<sstream>

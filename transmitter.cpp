@@ -40,7 +40,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-
 using std::exception;
 using std::ostringstream;
 
@@ -119,14 +118,14 @@ void Transmitter::play()
 
     buffer = (!readStdin) ? waveReader->getFrames(bufferFrames, frameOffset) : stdinReader->getFrames(bufferFrames);
 
-    void *params[5];
-    params[0] = &format.sampleRate;
-    params[1] = &clockDivisor;
-    params[2] = &frameOffset;
-    params[3] = &buffer;
-    params[4] = peripherals;
+    vector<void*> params;
+    params.push_back((void*)&format.sampleRate);
+    params.push_back((void*)&clockDivisor);
+    params.push_back((void*)&frameOffset);
+    params.push_back((void*)&buffer);
+    params.push_back((void*)peripherals);
 
-    int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, (void*)params);
+    int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, (void*)&params);
     if (returnCode) {
         oss << "Cannot create new thread (code: " << returnCode << ")";
         errorMessage = oss.str();
@@ -153,11 +152,11 @@ void Transmitter::transmit(void *params)
     vector<float> *frames = NULL;
     float *data;
 
-    unsigned int *sampleRate = ((unsigned int**)params)[0];
-    unsigned int *clockDivisor = ((unsigned int**)params)[1];
-    unsigned int *frameOffset = ((unsigned int**)params)[2];
-    vector<float> **buffer = ((vector<float>***)params)[3];
-    volatile unsigned *peripherals = ((volatile unsigned**)params)[4];
+    unsigned int *sampleRate = (unsigned int*)(*((vector<void*>*)params))[0];
+    unsigned int *clockDivisor = (unsigned int*)(*((vector<void*>*)params))[1];
+    unsigned int *frameOffset = (unsigned int*)(*((vector<void*>*)params))[2];
+    vector<float> **buffer = (vector<float>**)(*((vector<void*>*)params))[3];
+    volatile unsigned *peripherals = (volatile unsigned*)(*((vector<void*>*)params))[4];
 
     ACCESS(peripherals, 0x00200000) = (ACCESS(peripherals, 0x00200000) & 0xFFFF8FFF) | (0x01 << 14);
     ACCESS(peripherals, 0x00101070) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
@@ -186,19 +185,15 @@ void Transmitter::transmit(void *params)
                 offset -= length;
                 break;
             }
-
             ACCESS(peripherals, 0x00101074) = (0x5A << 24) | ((*clockDivisor) - (int)(round(data[offset] * 16.0)));
-
             while (temp >= offset) {
                 usleep(1);
-
                 current = ACCESS64(peripherals, 0x00003004);
                 offset = (current - start) * (*sampleRate) / 1000000;
             }
         }
 
         start = ACCESS64(peripherals, 0x00003004);
-
         delete frames;
     }
 
