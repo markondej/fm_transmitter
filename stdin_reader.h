@@ -41,7 +41,7 @@
 
 #define BUFFER_SIZE 128
 #define SAMPLE_RATE 22050
-#define BITS_PER_SAMPLE 8
+#define BITS_PER_SAMPLE 16
 #define CHANNELS 1
 
 using std::vector;
