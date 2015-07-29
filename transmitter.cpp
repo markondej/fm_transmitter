@@ -40,7 +40,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-#include <iostream>
 
 using std::exception;
 using std::ostringstream;

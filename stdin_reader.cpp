@@ -44,8 +44,16 @@ StdinReader::StdinReader()
     ostringstream oss;
 
     doStop = false;
+    isPreparingFrames = false;
+    isReading = false;
 
-    int returnCode = pthread_create(&thread, NULL, (volatile void*)(&this->readStdin), NULL);
+    void *params[4];
+    params[0] = &buffer;
+    params[1] = &doStop;
+    params[2] = &isPreparingFrames;
+    params[3] = &isReading;
+
+    int returnCode = pthread_create(&thread, NULL, &StdinReader::readStdin, (void*)params);
     if (returnCode) {
         oss << "Cannot create new thread (code: " << returnCode << ")";
         errorMessage = oss.str();
@@ -65,13 +73,23 @@ StdinReader *StdinReader::getInstance()
     return &instance;
 }
 
-void StdinReader::readStdin()
+void StdinReader::readStdin(void *params)
 {
+    vector<char> *buffer = ((vector<char>**)params)[0];
+    bool *doStop = ((bool**)params)[1];
+    bool *isPreparingFrames = ((bool**)params)[2];
+    bool *isReading = ((bool**)params)[3];
+
     char *readBuffer = new char[BUFFER_SIZE];
-    while(!doStop) {
+    while(!*doStop) {
+        while (*isPreparingFrames) {
+            usleep(1);
+        }
+        *isReading = true;
         int bytes = read(STDIN_FILENO, readBuffer, BUFFER_SIZE);
-        buffer.insert(buffer.end(), readBuffer, readBuffer + bytes);
+        buffer->insert(buffer->end(), readBuffer, readBuffer + bytes);
         usleep(1);
+        *isReading = false;
     }
 }
 
@@ -79,6 +97,11 @@ vector<float> *StdinReader::getFrames(unsigned int frameCount)
 {
     unsigned int bytesToRead, bufferSize, bytesPerFrame, offset, zeroOffset, restBytes;
     vector<float> *frames = new vector<float>();
+
+    while (isReading) {
+        usleep(1);
+    }
+    isPreparingFrames = true;
 
     bufferSize = buffer.size();
     bytesPerFrame = (BITS_PER_SAMPLE >> 3) * CHANNELS;
@@ -110,6 +133,7 @@ vector<float> *StdinReader::getFrames(unsigned int frameCount)
     }
 
     buffer.clear();
+    isPreparingFrames = false;
 
     return frames;
 }
