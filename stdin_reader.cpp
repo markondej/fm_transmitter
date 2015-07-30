@@ -35,6 +35,7 @@
 #include <exception>
 #include <sstream>
 #include <unistd.h>
+#include <string.h>
 
 using std::exception;
 using std::ostringstream;
@@ -44,13 +45,13 @@ StdinReader::StdinReader()
     ostringstream oss;
 
     doStop = true;
-    isPreparingFrames = false;
+    isDataAccess = false;
     isReading = false;
 
     vector<void*> params;
     params.push_back((void*)&buffer);
     params.push_back((void*)&doStop);
-    params.push_back((void*)&isPreparingFrames);
+    params.push_back((void*)&isDataAccess);
     params.push_back((void*)&isReading);
 
     int returnCode = pthread_create(&thread, NULL, &StdinReader::readStdin, (void*)&params);
@@ -80,7 +81,7 @@ void StdinReader::readStdin(void *params)
 {
     vector<char> *buffer = (vector<char>*)(*((vector<void*>*)params))[0];
     bool *doStop = (bool*)(*((vector<void*>*)params))[1];
-    bool *isPreparingFrames = (bool*)(*((vector<void*>*)params))[2];
+    bool *isDataAccess = (bool*)(*((vector<void*>*)params))[2];
     bool *isReading = (bool*)(*((vector<void*>*)params))[3];
 
     *doStop = false;
@@ -88,7 +89,7 @@ void StdinReader::readStdin(void *params)
     while(!*doStop) {
         *isReading = true;
 
-        while (*isPreparingFrames) {
+        while (*isDataAccess) {
             usleep(1);
         }
 
@@ -111,7 +112,7 @@ vector<float> *StdinReader::getFrames(unsigned int frameCount)
     while (isReading) {
         usleep(1);
     }
-    isPreparingFrames = true;
+    isDataAccess = true;
 
     bufferSize = buffer.size();
     bytesPerFrame = (BITS_PER_SAMPLE >> 3) * CHANNELS;
@@ -122,25 +123,28 @@ vector<float> *StdinReader::getFrames(unsigned int frameCount)
         frameCount = bytesToRead / bytesPerFrame;
     }
 
+    vector<char> data;
+    data.resize(bytesToRead);
+    memcpy(&(data[0]), &(buffer[0]), bytesToRead);
+    buffer.erase(buffer.begin(), buffer.begin() + bytesToRead);
+    isDataAccess = false;
+
     for (unsigned int i = 0; i < frameCount; i++) {
         offset = bytesPerFrame * i;
         if (CHANNELS != 1) {
             if (BITS_PER_SAMPLE != 8) {
-                frames->push_back(((int)(signed char)buffer[offset + 1] + (int)(signed char)buffer[offset + 3]) / (float)0x100);
+                frames->push_back(((int)(signed char)data[offset + 1] + (int)(signed char)data[offset + 3]) / (float)0x100);
             } else {
-                frames->push_back(((int)buffer[offset] + (int)buffer[offset + 1]) / (float)0x100 - 1.0f);
+                frames->push_back(((int)data[offset] + (int)data[offset + 1]) / (float)0x100 - 1.0f);
             }
         } else {
             if (BITS_PER_SAMPLE != 8) {
-                frames->push_back((signed char)buffer[offset + 1] / (float)0x80);
+                frames->push_back((signed char)data[offset + 1] / (float)0x80);
             } else {
-                frames->push_back(buffer[offset] / (float)0x80 - 1.0f);
+                frames->push_back(data[offset] / (float)0x80 - 1.0f);
             }
         }
     }
-
-    buffer.erase(buffer.begin(), buffer.begin() + bytesToRead);
-    isPreparingFrames = false;
 
     return frames;
 }

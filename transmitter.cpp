@@ -94,6 +94,7 @@ Transmitter::Transmitter(string filename, double frequency) :
     } else {
         stdinReader = StdinReader::getInstance();
         audioFormat = stdinReader->getFormat();
+        usleep(700000);
     }
     format = *audioFormat;
 

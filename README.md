@@ -15,7 +15,8 @@ sudo ./fm_transmitter [filename] [frequency]
 
 You can open WAVE files or read audio data from stdin, i.e.:
 ```
-sox star_wars.wav -r 8000 -c 1 -b 8 -t wav - | sudo ./fm_transmitter - 100.0
+sox star_wars.wav -r 44100 -c 1 -b 16 -t wav - | sudo ./fm_transmitter - 100.0
+arecord -D hw:1,0 -c1 -d 0 -r 44100 -f S16_LE | sudo ./bin/Debug/fm_transmitter - 100.6
 ```
 
 Please keep in mind that transmitting on certain frequencies without special permissions may be illegal in your country.

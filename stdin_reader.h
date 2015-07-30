@@ -40,8 +40,8 @@
 #include "error_reporter.h"
 
 #define BUFFER_SIZE 1024
-#define SAMPLE_RATE 8000
-#define BITS_PER_SAMPLE 8
+#define SAMPLE_RATE 44100
+#define BITS_PER_SAMPLE 16
 #define CHANNELS 1
 
 using std::vector;
@@ -60,7 +60,7 @@ class StdinReader : public ErrorReporter
 
         vector<char> buffer;
         static void readStdin(void *params);
-        bool doStop, isPreparingFrames, isReading;
+        bool doStop, isDataAccess, isReading;
 };
 
 #endif // STDIN_READER_H
