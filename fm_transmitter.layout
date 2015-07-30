@@ -10,10 +10,10 @@
 	<File name="stdin_reader.cpp" open="1" top="0" tabpos="2">
 		<Cursor position="1771" topLine="33" />
 	</File>
-	<File name="stdin_reader.h" open="1" top="0" tabpos="3">
-		<Cursor position="1902" topLine="35" />
+	<File name="stdin_reader.h" open="1" top="1" tabpos="3">
+		<Cursor position="1902" topLine="31" />
 	</File>
-	<File name="transmitter.cpp" open="1" top="1" tabpos="4">
+	<File name="transmitter.cpp" open="1" top="0" tabpos="4">
 		<Cursor position="4471" topLine="23" />
 	</File>
 	<File name="transmitter.h" open="0" top="0" tabpos="3">

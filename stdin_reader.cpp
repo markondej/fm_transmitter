@@ -36,8 +36,6 @@
 #include <sstream>
 #include <unistd.h>
 
-#include <iostream>
-
 using std::exception;
 using std::ostringstream;
 

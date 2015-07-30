@@ -39,9 +39,9 @@
 #include "audio_format.h"
 #include "error_reporter.h"
 
-#define BUFFER_SIZE 128
-#define SAMPLE_RATE 22050
-#define BITS_PER_SAMPLE 16
+#define BUFFER_SIZE 1024
+#define SAMPLE_RATE 8000
+#define BITS_PER_SAMPLE 8
 #define CHANNELS 1
 
 using std::vector;
