@@ -53,7 +53,7 @@ int main(int argc, char **argv)
         transmitter = new Transmitter(filename, frequency);
 
         AudioFormat format = transmitter->getFormat();
-        cout << "Playing: " << filename << ", "
+        cout << "Playing: " << ((filename != "-") ? filename : "stdin") << ", "
              << format.sampleRate << " Hz, "
              << format.bitsPerSample << " bits, "
              << ((format.channels > 0x01) ? "stereo" : "mono") << endl;
