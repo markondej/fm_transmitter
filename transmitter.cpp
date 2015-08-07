@@ -43,6 +43,11 @@
 using std::exception;
 using std::ostringstream;
 
+#define GPIO_BASE 0x00200000
+#define CLK0_BASE 0x00101070
+#define CLK0DIV_BASE 0x00101074
+#define TCNT_BASE 0x00003004
+
 #define ACCESS(base, offset) *(volatile unsigned int*)((int)base + offset)
 #define ACCESS64(base, offset) *(volatile unsigned long long*)((int)base + offset)
 
@@ -159,17 +164,17 @@ void Transmitter::transmit(void *params)
     vector<float> **buffer = (vector<float>**)(*((vector<void*>*)params))[3];
     volatile unsigned *peripherals = (volatile unsigned*)(*((vector<void*>*)params))[4];
 
-    ACCESS(peripherals, 0x00200000) = (ACCESS(peripherals, 0x00200000) & 0xFFFF8FFF) | (0x01 << 14);
-    ACCESS(peripherals, 0x00101070) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
+    ACCESS(peripherals, GPIO_BASE) = (ACCESS(peripherals, GPIO_BASE) & 0xFFFF8FFF) | (0x01 << 14);
+    ACCESS(peripherals, CLK0_BASE) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
 
-    playbackStart = ACCESS64(peripherals, 0x00003004);
+    playbackStart = ACCESS64(peripherals, TCNT_BASE);
     current = playbackStart;
     start = playbackStart;
 
     while (isTransmitting) {
         while (*buffer == NULL) {
             usleep(1);
-            current = ACCESS64(peripherals, 0x00003004);
+            current = ACCESS64(peripherals, TCNT_BASE);
         }
         frames = *buffer;
         *frameOffset = (current - playbackStart) * (*sampleRate) / 1000000;
@@ -186,19 +191,19 @@ void Transmitter::transmit(void *params)
                 offset -= length;
                 break;
             }
-            ACCESS(peripherals, 0x00101074) = (0x5A << 24) | ((*clockDivisor) - (int)(round(data[offset] * 16.0)));
+            ACCESS(peripherals, CLK0DIV_BASE) = (0x5A << 24) | ((*clockDivisor) - (int)(round(data[offset] * 16.0)));
             while (temp >= offset) {
                 usleep(1);
-                current = ACCESS64(peripherals, 0x00003004);
+                current = ACCESS64(peripherals, TCNT_BASE);
                 offset = (current - start) * (*sampleRate) / 1000000;
             }
         }
 
-        start = ACCESS64(peripherals, 0x00003004);
+        start = ACCESS64(peripherals, TCNT_BASE);
         delete frames;
     }
 
-    ACCESS(peripherals, 0x00101070) = (0x5A << 24);
+    ACCESS(peripherals, CLK0_BASE) = (0x5A << 24);
 }
 
 Transmitter::~Transmitter()

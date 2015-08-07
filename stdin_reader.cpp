@@ -49,7 +49,7 @@ StdinReader::StdinReader()
     isReading = false;
 
     vector<void*> params;
-    params.push_back((void*)&buffer);
+    params.push_back((void*)&stream);
     params.push_back((void*)&doStop);
     params.push_back((void*)&isDataAccess);
     params.push_back((void*)&isReading);
@@ -79,13 +79,13 @@ StdinReader *StdinReader::getInstance()
 
 void StdinReader::readStdin(void *params)
 {
-    vector<char> *buffer = (vector<char>*)(*((vector<void*>*)params))[0];
+    vector<char> *stream = (vector<char>*)(*((vector<void*>*)params))[0];
     bool *doStop = (bool*)(*((vector<void*>*)params))[1];
     bool *isDataAccess = (bool*)(*((vector<void*>*)params))[2];
     bool *isReading = (bool*)(*((vector<void*>*)params))[3];
 
     *doStop = false;
-    char *readBuffer = new char[BUFFER_SIZE];
+    char *readBuffer = new char[1024];
     while(!*doStop) {
         *isReading = true;
 
@@ -93,8 +93,11 @@ void StdinReader::readStdin(void *params)
             usleep(1);
         }
 
-        int bytes = read(STDIN_FILENO, readBuffer, BUFFER_SIZE);
-        buffer->insert(buffer->end(), readBuffer, readBuffer + bytes);
+        unsigned int streamSize = stream->size();
+        if (streamSize < MAX_STREAM_SIZE) {
+            int bytes = read(STDIN_FILENO, readBuffer, (streamSize + 1024 > MAX_STREAM_SIZE) ? MAX_STREAM_SIZE - streamSize : 1024);
+            stream->insert(stream->end(), readBuffer, readBuffer + bytes);
+        }
 
         *isReading = false;
         usleep(1);
@@ -106,7 +109,7 @@ void StdinReader::readStdin(void *params)
 
 vector<float> *StdinReader::getFrames(unsigned int frameCount)
 {
-    unsigned int bytesToRead, bufferSize, bytesPerFrame, offset;
+    unsigned int bytesToRead, streamSize, bytesPerFrame, offset;
     vector<float> *frames = new vector<float>();
 
     while (isReading) {
@@ -114,31 +117,31 @@ vector<float> *StdinReader::getFrames(unsigned int frameCount)
     }
     isDataAccess = true;
 
-    bufferSize = buffer.size();
-    bytesPerFrame = (BITS_PER_SAMPLE >> 3) * CHANNELS;
+    streamSize = stream.size();
+    bytesPerFrame = (STREAM_BITS_PER_SAMPLE >> 3) * STREAM_CHANNELS;
     bytesToRead = frameCount * bytesPerFrame;
 
-    if (bytesToRead > bufferSize) {
-        bytesToRead = bufferSize - bufferSize % bytesPerFrame;
+    if (bytesToRead > streamSize) {
+        bytesToRead = streamSize - streamSize % bytesPerFrame;
         frameCount = bytesToRead / bytesPerFrame;
     }
 
     vector<char> data;
     data.resize(bytesToRead);
-    memcpy(&(data[0]), &(buffer[0]), bytesToRead);
-    buffer.erase(buffer.begin(), buffer.begin() + bytesToRead);
+    memcpy(&(data[0]), &(stream[0]), bytesToRead);
+    stream.erase(stream.begin(), stream.begin() + bytesToRead);
     isDataAccess = false;
 
     for (unsigned int i = 0; i < frameCount; i++) {
         offset = bytesPerFrame * i;
-        if (CHANNELS != 1) {
-            if (BITS_PER_SAMPLE != 8) {
+        if (STREAM_CHANNELS != 1) {
+            if (STREAM_BITS_PER_SAMPLE != 8) {
                 frames->push_back(((int)(signed char)data[offset + 1] + (int)(signed char)data[offset + 3]) / (float)0x100);
             } else {
                 frames->push_back(((int)data[offset] + (int)data[offset + 1]) / (float)0x100 - 1.0f);
             }
         } else {
-            if (BITS_PER_SAMPLE != 8) {
+            if (STREAM_BITS_PER_SAMPLE != 8) {
                 frames->push_back((signed char)data[offset + 1] / (float)0x80);
             } else {
                 frames->push_back(data[offset] / (float)0x80 - 1.0f);
@@ -152,8 +155,8 @@ vector<float> *StdinReader::getFrames(unsigned int frameCount)
 AudioFormat *StdinReader::getFormat()
 {
     AudioFormat *format = new AudioFormat;
-    format->sampleRate = SAMPLE_RATE;
-    format->bitsPerSample = BITS_PER_SAMPLE;
-    format->channels = CHANNELS;
+    format->sampleRate = STREAM_SAMPLE_RATE;
+    format->bitsPerSample = STREAM_BITS_PER_SAMPLE;
+    format->channels = STREAM_CHANNELS;
     return format;
 }

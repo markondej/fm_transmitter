@@ -39,10 +39,10 @@
 #include "audio_format.h"
 #include "error_reporter.h"
 
-#define BUFFER_SIZE 1024
-#define SAMPLE_RATE 44100
-#define BITS_PER_SAMPLE 16
-#define CHANNELS 1
+#define MAX_STREAM_SIZE 2097152
+#define STREAM_SAMPLE_RATE 44100
+#define STREAM_BITS_PER_SAMPLE 16
+#define STREAM_CHANNELS 1
 
 using std::vector;
 
@@ -58,7 +58,7 @@ class StdinReader : public ErrorReporter
     private:
         StdinReader();
 
-        vector<char> buffer;
+        vector<char> stream;
         static void readStdin(void *params);
         bool doStop, isDataAccess, isReading;
 };
