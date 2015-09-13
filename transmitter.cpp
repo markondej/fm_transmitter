@@ -40,6 +40,8 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
+#include <iostream>
+
 using std::exception;
 using std::ostringstream;
 
@@ -155,6 +157,7 @@ void Transmitter::transmit(void *params)
 {
     unsigned long long current, start, playbackStart;
     unsigned int offset, length, temp;
+	float prevValue = 0.0, value = 0.0;
     vector<float> *frames = NULL;
     float *data;
 
@@ -164,6 +167,8 @@ void Transmitter::transmit(void *params)
     vector<float> **buffer = (vector<float>**)(*((vector<void*>*)params))[3];
     volatile unsigned *peripherals = (volatile unsigned*)(*((vector<void*>*)params))[4];
 
+	float preemp = 0.75 - 250000.0 / (float)(*sampleRate * 75);
+	
     ACCESS(peripherals, GPIO_BASE) = (ACCESS(peripherals, GPIO_BASE) & 0xFFFF8FFF) | (0x01 << 14);
     ACCESS(peripherals, CLK0_BASE) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
 
@@ -191,15 +196,23 @@ void Transmitter::transmit(void *params)
                 offset -= length;
                 break;
             }
-            ACCESS(peripherals, CLK0DIV_BASE) = (0x5A << 24) | ((*clockDivisor) - (int)(round(data[offset] * 16.0)));
+			
+			value = data[offset];
+
+			/* pre emphasis */
+			value = value + (value - prevValue) * preemp;
+			
+			value = (value < -1.0) ? -1.0 : ((value > 1.0) ? 1.0 : value);
+            ACCESS(peripherals, CLK0DIV_BASE) = (0x5A << 24) | ((*clockDivisor) - (int)(round(value * 16.0)));
             while (temp >= offset) {
                 usleep(1);
                 current = ACCESS64(peripherals, TCNT_BASE);
                 offset = (current - start) * (*sampleRate) / 1000000;
             }
+			prevValue = value;
         }
 
-        start = ACCESS64(peripherals, TCNT_BASE);
+		start = ACCESS64(peripherals, TCNT_BASE);
         delete frames;
     }
 

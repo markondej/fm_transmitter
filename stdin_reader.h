@@ -40,7 +40,7 @@
 #include "error_reporter.h"
 
 #define MAX_STREAM_SIZE 2097152
-#define STREAM_SAMPLE_RATE 44100
+#define STREAM_SAMPLE_RATE 22050
 #define STREAM_BITS_PER_SAMPLE 16
 #define STREAM_CHANNELS 1
 
