@@ -52,15 +52,16 @@ class StdinReader : public ErrorReporter
         virtual ~StdinReader();
 
         pthread_t thread;
-        static StdinReader *getInstance();
-        vector<float> *getFrames(unsigned int frameCount);
-        AudioFormat *getFormat();
+        vector<float>* getFrames(unsigned frameCount, bool &forceStop);
+        AudioFormat* getFormat();
+
+        static StdinReader* getInstance();
     private:
         StdinReader();
 
-        vector<char> stream;
-        static void readStdin(void *params);
-        bool doStop, isDataAccess, isReading;
+        static vector<char> stream;
+        static void* readStdin(void* params);
+        static bool doStop, isDataAccess, isReading;
 };
 
 #endif // STDIN_READER_H

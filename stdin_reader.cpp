@@ -36,38 +36,35 @@
 #include <sstream>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
 
 using std::exception;
 using std::ostringstream;
+
+bool StdinReader::doStop = false;
+bool StdinReader::isReading = false;
+bool StdinReader::isDataAccess = false;
+vector<char> StdinReader::stream;
 
 StdinReader::StdinReader()
 {
     ostringstream oss;
 
-    doStop = true;
-    isDataAccess = false;
-    isReading = false;
-
-    vector<void*> params;
-    params.push_back((void*)&stream);
-    params.push_back((void*)&doStop);
-    params.push_back((void*)&isDataAccess);
-    params.push_back((void*)&isReading);
-
-    int returnCode = pthread_create(&thread, NULL, &StdinReader::readStdin, (void*)&params);
+    int returnCode = pthread_create(&thread, NULL, &StdinReader::readStdin, NULL);
     if (returnCode) {
         oss << "Cannot create new thread (code: " << returnCode << ")";
         errorMessage = oss.str();
         throw exception();
     }
 
-    while (doStop) {
+    while (!isReading) {
         usleep(1);
     }
 }
 
 StdinReader::~StdinReader()
 {
+    doStop = true;
     pthread_join(thread, NULL);
 }
 
@@ -77,47 +74,57 @@ StdinReader *StdinReader::getInstance()
     return &instance;
 }
 
-void StdinReader::readStdin(void *params)
+void *StdinReader::readStdin(void *params)
 {
-    vector<char> *stream = (vector<char>*)(*((vector<void*>*)params))[0];
-    bool *doStop = (bool*)(*((vector<void*>*)params))[1];
-    bool *isDataAccess = (bool*)(*((vector<void*>*)params))[2];
-    bool *isReading = (bool*)(*((vector<void*>*)params))[3];
+    long flag = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, flag | O_NONBLOCK);
 
-    *doStop = false;
     char *readBuffer = new char[1024];
-    while(!*doStop) {
-        *isReading = true;
+    while (!doStop) {
+        isReading = true;
 
-        while (*isDataAccess) {
+        while (isDataAccess && !doStop) {
             usleep(1);
         }
-
-        unsigned int streamSize = stream->size();
+        if (doStop) {
+            break;
+        }
+        unsigned streamSize = stream.size();
         if (streamSize < MAX_STREAM_SIZE) {
             int bytes = read(STDIN_FILENO, readBuffer, (streamSize + 1024 > MAX_STREAM_SIZE) ? MAX_STREAM_SIZE - streamSize : 1024);
-            stream->insert(stream->end(), readBuffer, readBuffer + bytes);
+            if (bytes > 0) {
+                stream.insert(stream.end(), readBuffer, readBuffer + bytes);
+            }
         }
 
-        *isReading = false;
+        isReading = false;
         usleep(1);
-
     }
-
     delete readBuffer;
+
+    return NULL;
 }
 
-vector<float> *StdinReader::getFrames(unsigned int frameCount)
+vector<float> *StdinReader::getFrames(unsigned frameCount, bool &forceStop)
 {
-    unsigned int bytesToRead, streamSize, bytesPerFrame, offset;
-    vector<float> *frames = new vector<float>();
-
-    while (isReading) {
+    while (isReading && !forceStop) {
         usleep(1);
     }
+    if (forceStop) {
+        doStop = true;
+        return NULL;
+    }
+
     isDataAccess = true;
 
-    streamSize = stream.size();
+    unsigned offset, bytesToRead, bytesPerFrame;
+    unsigned streamSize = stream.size();
+    if (!streamSize) {
+        isDataAccess = false;
+        return NULL;
+    }
+
+    vector<float> *frames = new vector<float>();
     bytesPerFrame = (STREAM_BITS_PER_SAMPLE >> 3) * STREAM_CHANNELS;
     bytesToRead = frameCount * bytesPerFrame;
 
@@ -132,7 +139,7 @@ vector<float> *StdinReader::getFrames(unsigned int frameCount)
     stream.erase(stream.begin(), stream.begin() + bytesToRead);
     isDataAccess = false;
 
-    for (unsigned int i = 0; i < frameCount; i++) {
+    for (unsigned i = 0; i < frameCount; i++) {
         offset = bytesPerFrame * i;
         if (STREAM_CHANNELS != 1) {
             if (STREAM_BITS_PER_SAMPLE != 8) {

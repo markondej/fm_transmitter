@@ -42,9 +42,9 @@ using std::ostringstream;
 WaveReader::WaveReader(string filename) :
     filename(filename)
 {
-    char *headerData;
-    vector<char> *data;
-    unsigned int bytesToRead, headerOffset;
+    char* headerData;
+    vector<char>* data;
+    unsigned bytesToRead, headerOffset;
     ostringstream oss;
 
     ifs.open(filename.c_str(), ifstream::binary);
@@ -79,7 +79,7 @@ WaveReader::WaveReader(string filename) :
     headerOffset += bytesToRead;
     delete data;
 
-    unsigned int subchunk1MinSize = sizeof(PCMWaveHeader) - headerOffset - sizeof(PCMWaveHeader::subchunk2ID) - sizeof(PCMWaveHeader::subchunk2Size);
+    unsigned subchunk1MinSize = sizeof(PCMWaveHeader) - headerOffset - sizeof(PCMWaveHeader::subchunk2ID) - sizeof(PCMWaveHeader::subchunk2Size);
     if ((string(header.subchunk1ID, 4) != string("fmt ")) || (header.subchunk1Size < subchunk1MinSize)) {
         oss << "Error while opening " << filename << ", data corrupted";
         errorMessage = oss.str();
@@ -123,28 +123,26 @@ WaveReader::~WaveReader()
     ifs.close();
 }
 
-vector<char> *WaveReader::readData(unsigned int bytesToRead, bool closeFileOnException)
+vector<char>* WaveReader::readData(unsigned bytesToRead, bool closeFileOnException)
 {
-    vector<char> *data = new vector<char>();
     ostringstream oss;
-
-    if (fileSize < (unsigned int)ifs.tellg() + bytesToRead) {
+    if (fileSize < (unsigned)ifs.tellg() + bytesToRead) {
         oss << "Error while reading " << filename << ", data corrupted";
         if (closeFileOnException) ifs.close();
         errorMessage = oss.str();
         throw exception();
     }
 
+    vector<char>* data = new vector<char>();
     data->resize(bytesToRead);
     ifs.read(&(*data)[0], bytesToRead);
-
     return data;
 }
 
-vector<float> *WaveReader::getFrames(unsigned int frameCount, unsigned int frameOffset) {
-    unsigned int bytesToRead, bytesLeft, bytesPerFrame, offset;
-    vector<float> *frames = new vector<float>();
-    vector<char> *data;
+vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset) {
+    unsigned bytesToRead, bytesLeft, bytesPerFrame, offset;
+    vector<float>* frames = new vector<float>();
+    vector<char>* data;
 
     bytesPerFrame = (header.bitsPerSample >> 3) * header.channels;
     bytesToRead = frameCount * bytesPerFrame;
@@ -158,7 +156,7 @@ vector<float> *WaveReader::getFrames(unsigned int frameCount, unsigned int frame
     ifs.seekg(dataOffset + frameOffset * bytesPerFrame);
 
     data = readData(bytesToRead, false);
-    for (unsigned int i = 0; i < frameCount; i++) {
+    for (unsigned i = 0; i < frameCount; i++) {
         offset = bytesPerFrame * i;
         if (header.channels != 1) {
             if (header.bitsPerSample != 8) {
@@ -180,14 +178,14 @@ vector<float> *WaveReader::getFrames(unsigned int frameCount, unsigned int frame
     return frames;
 }
 
-bool WaveReader::isEnd()
+bool WaveReader::isEnd(unsigned frameOffset)
 {
-    return header.subchunk2Size + dataOffset - ifs.tellg() == 0;
+    return header.subchunk2Size <= frameOffset * (header.bitsPerSample >> 3) * header.channels;
 }
 
-AudioFormat *WaveReader::getFormat()
+AudioFormat* WaveReader::getFormat()
 {
-    AudioFormat *format = new AudioFormat;
+    AudioFormat* format = new AudioFormat;
     format->channels = header.channels;
     format->sampleRate = header.sampleRate;
     format->bitsPerSample = header.bitsPerSample;

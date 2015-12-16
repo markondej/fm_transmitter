@@ -38,7 +38,7 @@ struct AudioFormat
 {
     unsigned short channels;
     unsigned short bitsPerSample;
-    unsigned int sampleRate;
+    unsigned sampleRate;
 };
 
 #endif // AUDIO_FORMAT_H

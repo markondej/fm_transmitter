@@ -51,16 +51,16 @@ class WaveReader : public ErrorReporter
         WaveReader(string filename);
         virtual ~WaveReader();
 
-        AudioFormat *getFormat();
-        vector<float> *getFrames(unsigned int frameCount, unsigned int frameOffset);
-        bool isEnd();
+        AudioFormat* getFormat();
+        vector<float>* getFrames(unsigned frameCount, unsigned frameOffset);
+        bool isEnd(unsigned frameOffset);
     private:
         string filename;
         PCMWaveHeader header;
-        unsigned int fileSize, dataOffset;
+        unsigned fileSize, dataOffset;
         ifstream ifs;
 
-        vector<char> *readData(unsigned int bytesToRead, bool closeFileOnException);
+        vector<char>* readData(unsigned bytesToRead, bool closeFileOnException);
 };
 
 #endif // WAVE_READER_H

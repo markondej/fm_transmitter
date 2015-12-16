@@ -32,13 +32,14 @@
 */
 
 #include "transmitter.h"
+#include "wave_reader.h"
+#include "stdin_reader.h"
 #include <exception>
 #include <sstream>
 #include <cmath>
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
-#include <fcntl.h>
 
 using std::exception;
 using std::ostringstream;
@@ -48,18 +49,23 @@ using std::ostringstream;
 #define CLK0DIV_BASE 0x00101074
 #define TCNT_BASE 0x00003004
 
-#define ACCESS(base, offset) *(volatile unsigned int*)((int)base + offset)
+#define STDIN_READ_DELAY 700000
+
+#define ACCESS(base, offset) *(volatile unsigned*)((int)base + offset)
 #define ACCESS64(base, offset) *(volatile unsigned long long*)((int)base + offset)
 
 bool Transmitter::isTransmitting = false;
+unsigned Transmitter::clockDivisor = 0;
+unsigned Transmitter::frameOffset = 0;
+vector<float>* Transmitter::buffer = NULL;
+void* Transmitter::peripherals = NULL;
 
-Transmitter::Transmitter(string filename, double frequency) :
-    readStdin(filename == "-")
+Transmitter::Transmitter()
 {
     ostringstream oss;
     bool isBcm2835 = true;
 
-    FILE *pipe = popen("uname -m", "r");
+    FILE* pipe = popen("uname -m", "r");
     if (pipe) {
         char buffer[64];
         string machine = "";
@@ -70,7 +76,8 @@ Transmitter::Transmitter(string filename, double frequency) :
         }
         pclose(pipe);
 
-        if (machine != "armv6l\n") {
+	machine = machine.substr(0, machine.length() - 1);
+        if (machine != "armv6l") {
             isBcm2835 = false;
         }
     }
@@ -82,31 +89,27 @@ Transmitter::Transmitter(string filename, double frequency) :
         throw exception();
     }
 
-    void *peripheralsMap = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, isBcm2835 ? 0x20000000 : 0x3F000000);
+    peripherals = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, isBcm2835 ? 0x20000000 : 0x3F000000);
     close(memFd);
-    if (peripheralsMap == MAP_FAILED) {
+    if (peripherals == MAP_FAILED) {
         oss << "Cannot obtain access to peripherals (mmap error)";
         errorMessage = oss.str();
         throw exception();
     }
-
-    peripherals = (volatile unsigned*)peripheralsMap;
-
-    AudioFormat *audioFormat;
-    if (!readStdin) {
-        waveReader = new WaveReader(filename);
-        audioFormat = waveReader->getFormat();
-    } else {
-        stdinReader = StdinReader::getInstance();
-        audioFormat = stdinReader->getFormat();
-        usleep(700000);
-    }
-    format = *audioFormat;
-
-    clockDivisor = (unsigned int)((500 << 12) / frequency + 0.5);
 }
 
-void Transmitter::play()
+Transmitter::~Transmitter()
+{
+    munmap(peripherals, 0x002FFFFF);
+}
+
+Transmitter* Transmitter::getInstance()
+{
+    static Transmitter instance;
+    return &instance;
+}
+
+void Transmitter::play(string filename, double frequency, bool loop)
 {
     ostringstream oss;
 
@@ -116,22 +119,34 @@ void Transmitter::play()
         throw exception();
     }
 
-    frameOffset = 0;
+    WaveReader* file = NULL;
+    StdinReader* stdin = NULL;
+    AudioFormat* format;
+
+    bool readStdin = filename == "-";
+
+    if (!readStdin) {
+        file = new WaveReader(filename);
+        format = file->getFormat();
+    } else {
+        stdin = StdinReader::getInstance();
+        format = stdin->getFormat();
+        usleep(STDIN_READ_DELAY);
+    }
+
+    clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
+
     isTransmitting = true;
+    doStop = false;
+
+    unsigned bufferFrames = (unsigned)((unsigned long long)format->sampleRate * BUFFER_TIME / 1000000);
+
+    buffer = (!readStdin) ? file->getFrames(bufferFrames, 0) : stdin->getFrames(bufferFrames, doStop);
+
     pthread_t thread;
+    void* params = (void*)&format->sampleRate;
 
-    unsigned int bufferFrames = (unsigned int)((unsigned long long)format.sampleRate * BUFFER_TIME / 1000000);
-
-    buffer = (!readStdin) ? waveReader->getFrames(bufferFrames, frameOffset) : stdinReader->getFrames(bufferFrames);
-
-    vector<void*> params;
-    params.push_back((void*)&format.sampleRate);
-    params.push_back((void*)&clockDivisor);
-    params.push_back((void*)&frameOffset);
-    params.push_back((void*)&buffer);
-    params.push_back((void*)peripherals);
-
-    int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, (void*)&params);
+    int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, params);
     if (returnCode) {
         oss << "Cannot create new thread (code: " << returnCode << ")";
         errorMessage = oss.str();
@@ -140,48 +155,78 @@ void Transmitter::play()
 
     usleep(BUFFER_TIME / 2);
 
-    while(readStdin || !waveReader->isEnd()) {
-        if (buffer == NULL) {
-            buffer = (!readStdin) ? waveReader->getFrames(bufferFrames, frameOffset + bufferFrames) : stdinReader->getFrames(bufferFrames);
+    bool doPlay = true;
+    while (doPlay && !doStop) {
+        while ((readStdin || !file->isEnd(frameOffset + bufferFrames)) && !doStop) {
+            if (buffer == NULL) {
+                buffer = (!readStdin) ? file->getFrames(bufferFrames, frameOffset + bufferFrames) : stdin->getFrames(bufferFrames, doStop);
+            }
+            usleep(BUFFER_TIME / 2);
         }
-        usleep(BUFFER_TIME / 2);
-    }
+        if (loop && !readStdin && !doStop) {
+            isTransmitting = false;
 
+            buffer = file->getFrames(bufferFrames, 0);
+
+            pthread_join(thread, NULL);
+
+            isTransmitting = true;
+
+            returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, params);
+            if (returnCode) {
+                oss << "Cannot create new thread (code: " << returnCode << ")";
+                errorMessage = oss.str();
+                throw exception();
+            }
+        } else {
+            doPlay = false;
+        }
+    }
     isTransmitting = false;
+
     pthread_join(thread, NULL);
+
+    if (!readStdin) {
+        delete file;
+    }
 }
 
-void Transmitter::transmit(void *params)
+void* Transmitter::transmit(void* params)
 {
     unsigned long long current, start, playbackStart;
-    unsigned int offset, length, temp;
-	float prevValue = 0.0, value = 0.0;
-    vector<float> *frames = NULL;
-    float *data;
+    unsigned offset, length, temp;
+    vector<float>* frames = NULL;
+    float value = 0.0;
+    float* data;
+#ifndef NO_PREEMP
+    float prevValue = 0.0;
+#endif
 
-    unsigned int *sampleRate = (unsigned int*)(*((vector<void*>*)params))[0];
-    unsigned int *clockDivisor = (unsigned int*)(*((vector<void*>*)params))[1];
-    unsigned int *frameOffset = (unsigned int*)(*((vector<void*>*)params))[2];
-    vector<float> **buffer = (vector<float>**)(*((vector<void*>*)params))[3];
-    volatile unsigned *peripherals = (volatile unsigned*)(*((vector<void*>*)params))[4];
+    unsigned sampleRate = *(unsigned*)(params);
 
-	float preemp = 0.75 - 250000.0 / (float)(*sampleRate * 75);
+#ifndef NO_PREEMP
+    float preemp = 0.75 - 250000.0 / (float)(sampleRate * 75);
+#endif
 
     ACCESS(peripherals, GPIO_BASE) = (ACCESS(peripherals, GPIO_BASE) & 0xFFFF8FFF) | (0x01 << 14);
     ACCESS(peripherals, CLK0_BASE) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
 
+    frameOffset = 0;
     playbackStart = ACCESS64(peripherals, TCNT_BASE);
     current = playbackStart;
     start = playbackStart;
 
     while (isTransmitting) {
-        while (*buffer == NULL) {
+        while ((buffer == NULL) && !isTransmitting) {
             usleep(1);
             current = ACCESS64(peripherals, TCNT_BASE);
         }
-        frames = *buffer;
-        *frameOffset = (current - playbackStart) * (*sampleRate) / 1000000;
-        *buffer = NULL;
+        if (!isTransmitting) {
+            break;
+        }
+        frames = buffer;
+        frameOffset = (current - playbackStart) * (sampleRate) / 1000000;
+        buffer = NULL;
 
         length = frames->size();
         data = &(*frames)[0];
@@ -195,39 +240,51 @@ void Transmitter::transmit(void *params)
                 break;
             }
 
-			value = data[offset];
+            value = data[offset];
 
-			/* pre emphasis */
-			value = value + (value - prevValue) * preemp;
+#ifndef NO_PREEMP
+            value = value + (value - prevValue) * preemp;
+            value = (value < -1.0) ? -1.0 : ((value > 1.0) ? 1.0 : value);
+#endif
 
-			value = (value < -1.0) ? -1.0 : ((value > 1.0) ? 1.0 : value);
-            ACCESS(peripherals, CLK0DIV_BASE) = (0x5A << 24) | ((*clockDivisor) - (int)(round(value * 16.0)));
+            ACCESS(peripherals, CLK0DIV_BASE) = (0x5A << 24) | ((clockDivisor) - (int)(round(value * 16.0)));
             while (temp >= offset) {
                 usleep(1);
                 current = ACCESS64(peripherals, TCNT_BASE);
-                offset = (current - start) * (*sampleRate) / 1000000;
+                offset = (current - start) * (sampleRate) / 1000000;
             }
-			prevValue = value;
+#ifndef NO_PREEMP
+            prevValue = value;
+#endif
         }
 
-		start = ACCESS64(peripherals, TCNT_BASE);
+        start = ACCESS64(peripherals, TCNT_BASE);
         delete frames;
     }
 
     ACCESS(peripherals, CLK0_BASE) = (0x5A << 24);
+
+    return NULL;
 }
 
-Transmitter::~Transmitter()
+AudioFormat& Transmitter::getFormat(string filename)
 {
-    munmap(peripherals, 0x002FFFFF);
-    if (!readStdin) {
-        delete waveReader;
+    WaveReader* file;
+    StdinReader* stdin;
+    AudioFormat* format;
+
+   if (filename != "-") {
+        file = new WaveReader(filename);
+        format = file->getFormat();
+        delete file;
     } else {
-        delete stdinReader;
+        stdin = StdinReader::getInstance();
+        format = stdin->getFormat();
     }
+    return *format;
 }
 
-AudioFormat& Transmitter::getFormat()
+void Transmitter::stop()
 {
-    return format;
+    doStop = true;
 }
