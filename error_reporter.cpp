@@ -33,9 +33,16 @@
 
 #include "error_reporter.h"
 
-string ErrorReporter::errorMessage = string();
-
-string ErrorReporter::getLastError()
+ErrorReporter::ErrorReporter(string message) :
+    errorMessage(message) 
 {
-    return errorMessage;
+}
+
+ErrorReporter::~ErrorReporter() throw() 
+{
+}
+		
+const char* ErrorReporter::what() const throw()
+{
+	return errorMessage.c_str();
 }

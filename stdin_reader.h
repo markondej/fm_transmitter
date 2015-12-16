@@ -46,7 +46,7 @@
 
 using std::vector;
 
-class StdinReader : public ErrorReporter
+class StdinReader
 {
     public:
         virtual ~StdinReader();

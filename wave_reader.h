@@ -39,13 +39,12 @@
 #include <fstream>
 #include "audio_format.h"
 #include "pcm_wave_header.h"
-#include "error_reporter.h"
 
 using std::vector;
 using std::string;
 using std::ifstream;
 
-class WaveReader : public ErrorReporter
+class WaveReader
 {
     public:
         WaveReader(string filename);

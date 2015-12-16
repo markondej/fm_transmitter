@@ -34,14 +34,12 @@
 #include "transmitter.h"
 #include "wave_reader.h"
 #include "stdin_reader.h"
-#include <exception>
 #include <sstream>
 #include <cmath>
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
 
-using std::exception;
 using std::ostringstream;
 
 #define GPIO_BASE 0x00200000
@@ -62,7 +60,6 @@ void* Transmitter::peripherals = NULL;
 
 Transmitter::Transmitter()
 {
-    ostringstream oss;
     bool isBcm2835 = true;
 
     FILE* pipe = popen("uname -m", "r");
@@ -76,7 +73,7 @@ Transmitter::Transmitter()
         }
         pclose(pipe);
 
-	machine = machine.substr(0, machine.length() - 1);
+        machine = machine.substr(0, machine.length() - 1);
         if (machine != "armv6l") {
             isBcm2835 = false;
         }
@@ -84,17 +81,13 @@ Transmitter::Transmitter()
 
     int memFd;
     if ((memFd = open("/dev/mem", O_RDWR | O_SYNC)) < 0) {
-        oss << "Cannot open /dev/mem (permission denied)";
-        errorMessage = oss.str();
-        throw exception();
+        throw ErrorReporter("Cannot open /dev/mem (permission denied)");
     }
 
     peripherals = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, isBcm2835 ? 0x20000000 : 0x3F000000);
     close(memFd);
     if (peripherals == MAP_FAILED) {
-        oss << "Cannot obtain access to peripherals (mmap error)";
-        errorMessage = oss.str();
-        throw exception();
+        throw ErrorReporter("Cannot obtain access to peripherals (mmap error)");
     }
 }
 
@@ -111,12 +104,8 @@ Transmitter* Transmitter::getInstance()
 
 void Transmitter::play(string filename, double frequency, bool loop)
 {
-    ostringstream oss;
-
     if (isTransmitting) {
-        oss << "Cannot play, transmitter already in use";
-        errorMessage = oss.str();
-        throw exception();
+        throw ErrorReporter("Cannot play, transmitter already in use");
     }
 
     WaveReader* file = NULL;
@@ -148,9 +137,13 @@ void Transmitter::play(string filename, double frequency, bool loop)
 
     int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, params);
     if (returnCode) {
+        if (!readStdin) {
+            delete file;
+        }
+        delete format;
+        ostringstream oss;
         oss << "Cannot create new thread (code: " << returnCode << ")";
-        errorMessage = oss.str();
-        throw exception();
+        throw ErrorReporter(oss.str());
     }
 
     usleep(BUFFER_TIME / 2);
@@ -174,9 +167,13 @@ void Transmitter::play(string filename, double frequency, bool loop)
 
             returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, params);
             if (returnCode) {
+                if (!readStdin) {
+                    delete file;
+                }
+                delete format;
+                ostringstream oss;
                 oss << "Cannot create new thread (code: " << returnCode << ")";
-                errorMessage = oss.str();
-                throw exception();
+                throw ErrorReporter(oss.str());
             }
         } else {
             doPlay = false;
@@ -189,6 +186,7 @@ void Transmitter::play(string filename, double frequency, bool loop)
     if (!readStdin) {
         delete file;
     }
+    delete format;
 }
 
 void* Transmitter::transmit(void* params)
@@ -267,7 +265,7 @@ void* Transmitter::transmit(void* params)
     return NULL;
 }
 
-AudioFormat& Transmitter::getFormat(string filename)
+AudioFormat* Transmitter::getFormat(string filename)
 {
     WaveReader* file;
     StdinReader* stdin;
@@ -281,7 +279,8 @@ AudioFormat& Transmitter::getFormat(string filename)
         stdin = StdinReader::getInstance();
         format = stdin->getFormat();
     }
-    return *format;
+	
+    return format;
 }
 
 void Transmitter::stop()

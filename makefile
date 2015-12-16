@@ -1,7 +1,7 @@
 CFLAGS = -Wall -fexceptions -lpthread -lm -O3 -fpermissive -fno-strict-aliasing
 TARGET = fm_transmitter
 
-OBJS = main.o wave_reader.o stdin_reader.o error_reporter.o transmitter.o
+OBJS = main.o error_reporter.o wave_reader.o stdin_reader.o transmitter.o
 
 all: $(OBJS)
 	g++ $(CFLAGS) -o $(TARGET) $(OBJS)

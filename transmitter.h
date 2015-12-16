@@ -44,7 +44,7 @@ using std::vector;
 
 using std::string;
 
-class Transmitter : public ErrorReporter
+class Transmitter
 {
     public:
         virtual ~Transmitter();
@@ -53,7 +53,7 @@ class Transmitter : public ErrorReporter
         void stop();
 
 	static Transmitter* getInstance(); 
-        static AudioFormat& getFormat(string filename);
+        static AudioFormat* getFormat(string filename);
     private:
         Transmitter();
 

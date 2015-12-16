@@ -80,15 +80,16 @@ int main(int argc, char** argv)
     try {
         transmitter = Transmitter::getInstance();
 
-        AudioFormat format = Transmitter::getFormat(filename);
+        AudioFormat* format = Transmitter::getFormat(filename);
         cout << "Playing: " << ((filename != "-") ? filename : "stdin") << ", "
-             << format.sampleRate << " Hz, "
-             << format.bitsPerSample << " bits, "
-             << ((format.channels > 0x01) ? "stereo" : "mono") << endl;
+             << format->sampleRate << " Hz, "
+             << format->bitsPerSample << " bits, "
+             << ((format->channels > 0x01) ? "stereo" : "mono") << endl;
+        delete format;
 
         transmitter->play(filename, frequency, loop);
-    } catch (exception &e) {
-        cout << "Error: " << ErrorReporter::getLastError() << endl;
+    } catch (exception &error) {
+        cout << "Error: " << error.what() << endl;
         return 1;
     }
 

@@ -32,13 +32,12 @@
 */
 
 #include "stdin_reader.h"
-#include <exception>
+#include "error_reporter.h"
 #include <sstream>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
 
-using std::exception;
 using std::ostringstream;
 
 bool StdinReader::doStop = false;
@@ -48,13 +47,11 @@ vector<char> StdinReader::stream;
 
 StdinReader::StdinReader()
 {
-    ostringstream oss;
-
     int returnCode = pthread_create(&thread, NULL, &StdinReader::readStdin, NULL);
     if (returnCode) {
+        ostringstream oss;
         oss << "Cannot create new thread (code: " << returnCode << ")";
-        errorMessage = oss.str();
-        throw exception();
+        throw ErrorReporter(oss.str());
     }
 
     while (!isReading) {
@@ -68,7 +65,7 @@ StdinReader::~StdinReader()
     pthread_join(thread, NULL);
 }
 
-StdinReader *StdinReader::getInstance()
+StdinReader* StdinReader::getInstance()
 {
     static StdinReader instance;
     return &instance;
@@ -105,7 +102,7 @@ void *StdinReader::readStdin(void *params)
     return NULL;
 }
 
-vector<float> *StdinReader::getFrames(unsigned frameCount, bool &forceStop)
+vector<float>* StdinReader::getFrames(unsigned frameCount, bool &forceStop)
 {
     while (isReading && !forceStop) {
         usleep(1);
@@ -159,9 +156,9 @@ vector<float> *StdinReader::getFrames(unsigned frameCount, bool &forceStop)
     return frames;
 }
 
-AudioFormat *StdinReader::getFormat()
+AudioFormat* StdinReader::getFormat()
 {
-    AudioFormat *format = new AudioFormat;
+    AudioFormat* format = new AudioFormat;
     format->sampleRate = STREAM_SAMPLE_RATE;
     format->bitsPerSample = STREAM_BITS_PER_SAMPLE;
     format->channels = STREAM_CHANNELS;
