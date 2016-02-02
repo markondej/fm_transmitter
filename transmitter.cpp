@@ -215,8 +215,8 @@ void* Transmitter::transmit(void* params)
     start = playbackStart;
 
     while (isTransmitting) {
-        while (buffer == NULL) {
-            asm("nop");
+        while ((buffer == NULL) && isTransmitting) {
+            usleep(1);
             current = ACCESS64(peripherals, TCNT_BASE);
         }
         if (!isTransmitting) {
