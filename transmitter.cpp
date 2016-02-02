@@ -215,8 +215,9 @@ void* Transmitter::transmit(void* params)
     start = playbackStart;
 
     while (isTransmitting) {
-        while ((buffer == NULL) && !isTransmitting) {
-            usleep(1);
+        while (buffer == NULL) {
+            asm("nop");
+            //usleep(1);
             current = ACCESS64(peripherals, TCNT_BASE);
         }
         if (!isTransmitting) {
@@ -247,7 +248,8 @@ void* Transmitter::transmit(void* params)
 
             ACCESS(peripherals, CLK0DIV_BASE) = (0x5A << 24) | ((clockDivisor) - (int)(round(value * 16.0)));
             while (temp >= offset) {
-                usleep(1);
+                asm("nop");
+                //usleep(1);
                 current = ACCESS64(peripherals, TCNT_BASE);
                 offset = (current - start) * (sampleRate) / 1000000;
             }
