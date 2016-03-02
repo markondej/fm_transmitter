@@ -27,7 +27,7 @@ Please keep in mind that transmitting on certain frequencies without special per
 
 ## New features
 
-* works both on RPi 1 and RPi 2
+* works both on RPi 1 and RPi 2 and RPi 3
 * reads mono and stereo files
 * reads data from stdin
 * based on threads
