@@ -1,6 +1,6 @@
 # fm_transmitter
 
-Use Raspberry Pi as FM transmitter. Now supports both RPi 1 and RPi 2 boards.
+Use Raspberry Pi as FM transmitter. Works on any RPi board.
 
 This project uses the general clock output to produce frequency modulated radio communication. It is based on idea originaly posted here: [http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter](http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter), but does not use DMA controller in order to distribute samples to output (clock generator),so sound quality is worse as in PiFm project and only mono transmition is available but this makes possible to run it on all kind of boards.
 
@@ -27,7 +27,7 @@ Please keep in mind that transmitting on certain frequencies without special per
 
 ## New features
 
-* works both on RPi 1 and RPi 2 and RPi 3
+* works on RPi 1, 2 and 3
 * reads mono and stereo files
 * reads data from stdin
 * based on threads
