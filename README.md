@@ -28,6 +28,10 @@ You can open WAVE files or read audio data from stdin, i.e.:
 sox star_wars.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
 arecord -D hw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
 ```
+Broadcast from a usb microphone (see arecord manual page for config)
+
+<code>arecord -d0 -c2 -f S16_LE -r 22050 -twav -D copy | sudo ./fm_transmitter -f 103.3 - </code>
+
 ## Steps for playing _mp3_ files:
 
 Install **ffmpeg** & other libraries in RaspberryPi by the following steps-->
