@@ -56,8 +56,11 @@ sudo make install
 **Note--** use <code>sudo ./configure --arch=armel --target-os=linux --enable-gpl --enable-libx264 --enable-nonfree</code> for devices prior to ***RaspberryPi 2 model B+***.
 
 _This Process will take some time , Have patience :)_
+
 ## How to play mp3 files :
-run - <code>sudo python ./PiStation.py -f [desired frequency] [filename]
+
+<code>sudo python ./PiStation.py -f [desired frequency] [filename]</code>
+
 --------------
 About the Program and What it Does
 --------------
