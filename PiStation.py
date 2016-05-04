@@ -14,7 +14,7 @@ def main():
     print ("Welcome to PiStation!  \nVersion 1.0 \nGPLv3 License\n")    
     #This block is for setting default values for frequency in case argument is not provided
     if arg.frequency is None:
-        frequency = raw_input("Enter the frequency: ")
+        frequency = raw_input("Enter the frequency (press Enter to set default frequency of 103.3 MHz) : ")
         if frequency == "":
             frequency = '103.3'
     elif 87.1 >= arg.frequency >= 108.2:
