@@ -61,9 +61,10 @@ sudo make install
 
 _This Process will take some time , Have patience :)_
 
+_Also support for other file types can be added , you can add these support during compiling the ffmpeg_
 ## How to play _mp3_ files :
 
-<code>sudo python ./PiStation.py example.mp3</code>
+<code>sudo python ./PiStation.py example.mp3(or wav)</code>
 
 or
 
