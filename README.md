@@ -14,12 +14,12 @@ This project uses the general clock output to produce frequency modulated radio 
 
 ## How to use it
 
-To compile this project use commands below:
+First compile this project, use commands below:
 ```
 sudo apt-get install make gcc g++
 make
 ``` 
-You can use it directly by typing:
+Now, you can use it directly by typing:
 ```
 sudo ./fm_transmitter [-f frequency] [-r] filename
 ```
@@ -28,7 +28,7 @@ You can open WAVE files or read audio data from stdin, i.e.:
 sox star_wars.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
 arecord -D hw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
 ```
-## Steps for playing **mp3** files:
+## Steps for playing _mp3_ files:
 
 Install **ffmpeg** & other libraries in RaspberryPi by the following steps-->
 
@@ -57,7 +57,7 @@ sudo make install
 
 _This Process will take some time , Have patience :)_
 
-## How to play mp3 files :
+## How to play _mp3_ files :
 
 <code>sudo python ./PiStation.py -f [desired frequency] [filename]</code>
 
