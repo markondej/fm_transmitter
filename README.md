@@ -60,7 +60,9 @@ _This Process will take some time , Have patience :)_
 ## How to play _mp3_ files :
 
 <code>sudo python ./PiStation.py example.mp3</code>
+
 or
+
 <code>sudo python ./PiStation.py -f [desired frequency] [filename]</code>
 
 --------------
