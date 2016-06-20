@@ -17,12 +17,23 @@ Then you can use it by typing:
 sudo ./fm_transmitter [-f frequency] [-r] filename
 ```
 
+### WAVE Files
 You can open WAVE files or read audio data from stdin, i.e.:
 ```
 sox star_wars.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
-arecord -D hw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
 ```
 
+### USB sound-card
+To use a USB sound-card type this:
+```
+arecord -D hw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
+```
+Some devices have problems with the one up (there is a warning in the terminal like ``` buffer overflow ``` after a few seconds - the transmitting is slow and will stopp), then you can use the following:
+```
+arecord -D plughw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
+```
+
+## Law
 Please keep in mind that transmitting on certain frequencies without special permissions may be illegal in your country.
 
 ## New features
