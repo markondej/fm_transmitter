@@ -28,7 +28,7 @@ To use a USB sound-card type this:
 ```
 arecord -D hw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
 ```
-Some devices have problems with the one up (there is a warning in the terminal like ``` buffer overflow ``` after a few seconds - the transmitting is slow and will stop), then you can use the following:
+Some devices have problems with this command (there is a warning in the terminal like ``` buffer overflow ``` and after a few seconds - the transmitting gets slow and will stop), then you can use the following:
 ```
 arecord -D plughw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
 ```
