@@ -39,8 +39,8 @@
 using std::ostringstream;
 using std::exception;
 
-WaveReader::WaveReader(string filename) :
-    filename(filename)
+WaveReader::WaveReader(string filename, bool &forceStop) :
+    filename(filename), inputReady(false), fileSize(0)
 {
     char* headerData;
     vector<char>* data;
@@ -55,13 +55,15 @@ WaveReader::WaveReader(string filename) :
         throw ErrorReporter(oss.str());
     }
 
-    ifs.seekg(0, ifs.end);
-    fileSize = ifs.tellg();
-    ifs.seekg(0, ifs.beg);
+    if (!filename.empty()) {
+        ifs.seekg(0, ifs.end);
+        fileSize = ifs.tellg();
+        ifs.seekg(0, ifs.beg);
+    }
 
     try {
         bytesToRead = sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) + sizeof(PCMWaveHeader::format);
-        data = readData(bytesToRead, true);
+        data = readData(bytesToRead, forceStop, true);
         memcpy(headerData, &(*data)[0], bytesToRead);
         headerOffset = bytesToRead;
         delete data;
@@ -72,7 +74,7 @@ WaveReader::WaveReader(string filename) :
         }
 
         bytesToRead = sizeof(PCMWaveHeader::subchunk1ID) + sizeof(PCMWaveHeader::subchunk1Size);
-        data = readData(bytesToRead, true);
+        data = readData(bytesToRead, forceStop, true);
         memcpy(&headerData[headerOffset], &(*data)[0], bytesToRead);
         headerOffset += bytesToRead;
         delete data;
@@ -83,7 +85,7 @@ WaveReader::WaveReader(string filename) :
             throw ErrorReporter(oss.str());
         }
 
-        data = readData(header.subchunk1Size, true);
+        data = readData(header.subchunk1Size, forceStop, true);
         memcpy(&headerData[headerOffset], &(*data)[0], subchunk1MinSize);
         headerOffset += subchunk1MinSize;
         delete data;
@@ -97,7 +99,7 @@ WaveReader::WaveReader(string filename) :
         }
 
         bytesToRead = sizeof(PCMWaveHeader::subchunk2ID) + sizeof(PCMWaveHeader::subchunk2Size);
-        data = readData(bytesToRead, true);
+        data = readData(bytesToRead, forceStop, true);
         memcpy(&headerData[headerOffset], &(*data)[0], bytesToRead);
         headerOffset += bytesToRead;
         delete data;
@@ -107,7 +109,9 @@ WaveReader::WaveReader(string filename) :
             throw ErrorReporter(oss.str());
         }
     } catch (ErrorReporter &error) {
-        ifs.close();
+        if (filename.empty()) {
+            ifs.close();
+        }
         throw error;
     }
 
@@ -116,11 +120,16 @@ WaveReader::WaveReader(string filename) :
 
 WaveReader::~WaveReader()
 {
-    ifs.close();
+    if (filename.empty()) {
+        ifs.close();
+    }
 }
 
-vector<char>* WaveReader::readData(unsigned bytesToRead, bool closeFileOnException)
+vector<char>* WaveReader::readData(unsigned bytesToRead, &bool forceStop, bool closeFileOnException)
 {
+    vector<char>* data = new vector<char>();
+    data->resize(bytesToRead);
+
     if (fileSize < (unsigned)ifs.tellg() + bytesToRead) {
         ostringstream oss;
         oss << "Error while reading " << filename << ", data corrupted";
