@@ -44,8 +44,6 @@ using std::ostringstream;
 
 #define GPIO_BASE 0x00200000
 #define CLK0_BASE 0x00101070
-
-
 #define CLK0DIV_BASE 0x00101074
 #define TCNT_BASE 0x00003004
 
@@ -129,9 +127,6 @@ void Transmitter::play(string filename, double frequency, bool loop)
     clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
     unsigned bufferFrames = (unsigned)((unsigned long long)format->sampleRate * BUFFER_TIME / 1000000);
 
-    ACCESS(peripherals, GPIO_BASE) = (ACCESS(peripherals, GPIO_BASE) & 0xFFFF8FFF) | (0x01 << 14);
-    ACCESS(peripherals, CLK0_BASE) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
-
     frameOffset = 0;
     isTransmitting = true;
     isRestart = false;
@@ -198,6 +193,9 @@ void* Transmitter::transmit(void* params)
     float preemp = 0.75 - 250000.0 / (float)(sampleRate * 75);
 #endif
 
+    ACCESS(peripherals, GPIO_BASE) = (ACCESS(peripherals, GPIO_BASE) & 0xFFFF8FFF) | (0x01 << 14);
+    ACCESS(peripherals, CLK0_BASE) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
+
     playbackStart = ACCESS64(peripherals, TCNT_BASE);
     current = playbackStart;
 
@@ -217,7 +215,7 @@ void* Transmitter::transmit(void* params)
         }
         frames = buffer;
         frameOffset = (current - playbackStart) * (sampleRate) / 1000000;
-	buffer = NULL;
+        buffer = NULL;
 
         length = frames->size();
         data = &(*frames)[0];
