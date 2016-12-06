@@ -44,6 +44,8 @@ using std::ostringstream;
 
 #define GPIO_BASE 0x00200000
 #define CLK0_BASE 0x00101070
+
+
 #define CLK0DIV_BASE 0x00101074
 #define TCNT_BASE 0x00003004
 
@@ -53,6 +55,7 @@ using std::ostringstream;
 #define ACCESS64(base, offset) *(volatile unsigned long long*)((int)base + offset)
 
 bool Transmitter::isTransmitting = false;
+bool Transmitter::isRestart = false;
 unsigned Transmitter::clockDivisor = 0;
 unsigned Transmitter::frameOffset = 0;
 vector<float>* Transmitter::buffer = NULL;
@@ -124,11 +127,15 @@ void Transmitter::play(string filename, double frequency, bool loop)
     }
 
     clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
-
-    isTransmitting = true;
-    doStop = false;
-
     unsigned bufferFrames = (unsigned)((unsigned long long)format->sampleRate * BUFFER_TIME / 1000000);
+
+    ACCESS(peripherals, GPIO_BASE) = (ACCESS(peripherals, GPIO_BASE) & 0xFFFF8FFF) | (0x01 << 14);
+    ACCESS(peripherals, CLK0_BASE) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
+
+    frameOffset = 0;
+    isTransmitting = true;
+    isRestart = false;
+    doStop = false;
 
     buffer = (!readStdin) ? file->getFrames(bufferFrames, 0) : stdin->getFrames(bufferFrames, doStop);
 
@@ -148,8 +155,7 @@ void Transmitter::play(string filename, double frequency, bool loop)
 
     usleep(BUFFER_TIME / 2);
 
-    bool doPlay = true;
-    while (doPlay && !doStop) {
+    while (!doStop) {
         while ((readStdin || !file->isEnd(frameOffset + bufferFrames)) && !doStop) {
             if (buffer == NULL) {
                 buffer = (!readStdin) ? file->getFrames(bufferFrames, frameOffset + bufferFrames) : stdin->getFrames(bufferFrames, doStop);
@@ -157,26 +163,12 @@ void Transmitter::play(string filename, double frequency, bool loop)
             usleep(BUFFER_TIME / 2);
         }
         if (loop && !readStdin && !doStop) {
-            isTransmitting = false;
-
+            frameOffset = 0;
+            isRestart = true;
             buffer = file->getFrames(bufferFrames, 0);
-
-            pthread_join(thread, NULL);
-
-            isTransmitting = true;
-
-            returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, params);
-            if (returnCode) {
-                if (!readStdin) {
-                    delete file;
-                }
-                delete format;
-                ostringstream oss;
-                oss << "Cannot create new thread (code: " << returnCode << ")";
-                throw ErrorReporter(oss.str());
-            }
+            usleep(BUFFER_TIME / 2);
         } else {
-            doPlay = false;
+            doStop = true;
         }
     }
     isTransmitting = false;
@@ -206,15 +198,11 @@ void* Transmitter::transmit(void* params)
     float preemp = 0.75 - 250000.0 / (float)(sampleRate * 75);
 #endif
 
-    ACCESS(peripherals, GPIO_BASE) = (ACCESS(peripherals, GPIO_BASE) & 0xFFFF8FFF) | (0x01 << 14);
-    ACCESS(peripherals, CLK0_BASE) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
-
-    frameOffset = 0;
     playbackStart = ACCESS64(peripherals, TCNT_BASE);
     current = playbackStart;
-    start = playbackStart;
 
     while (isTransmitting) {
+        start = current;
         while ((buffer == NULL) && isTransmitting) {
             usleep(1);
             current = ACCESS64(peripherals, TCNT_BASE);
@@ -222,9 +210,14 @@ void* Transmitter::transmit(void* params)
         if (!isTransmitting) {
             break;
         }
+        if (isRestart) {
+            playbackStart = current;
+            start = current;
+            isRestart = false;
+        }
         frames = buffer;
         frameOffset = (current - playbackStart) * (sampleRate) / 1000000;
-        buffer = NULL;
+	buffer = NULL;
 
         length = frames->size();
         data = &(*frames)[0];
@@ -256,7 +249,6 @@ void* Transmitter::transmit(void* params)
 #endif
         }
 
-        start = ACCESS64(peripherals, TCNT_BASE);
         delete frames;
     }
 
