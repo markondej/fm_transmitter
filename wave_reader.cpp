@@ -33,59 +33,73 @@
 
 #include "wave_reader.h"
 #include "error_reporter.h"
+#include <iostream>
 #include <sstream>
 #include <string.h>
 
 using std::ostringstream;
 using std::exception;
+using std::cin;
 
 WaveReader::WaveReader(string filename, bool &forceStop) :
-    filename(filename), inputReady(false), fileSize(0)
+    filename(filename), fileSize(0)
 {
-    char* headerData;
+    char* headerData = (char*)((void*)&header);
     vector<char>* data;
     unsigned bytesToRead, headerOffset;
     ostringstream oss;
 
-    ifs.open(filename.c_str(), ifstream::binary);
-    headerData = (char*)((void*)&header);
-
-    if (!ifs.is_open()) {
-        oss << "Cannot open " << filename << ", file does not exist";
-        throw ErrorReporter(oss.str());
-    }
-
     if (!filename.empty()) {
-        ifs.seekg(0, ifs.end);
-        fileSize = ifs.tellg();
-        ifs.seekg(0, ifs.beg);
+        ifs.open(filename.c_str(), ifstream::binary);
+
+        if (!ifs.is_open()) {
+            oss << "Cannot open " << filename << ", file does not exist";
+            throw ErrorReporter(oss.str());
+        }
+
+        is = &ifs;
+
+        is->seekg(0, is->end);
+        fileSize = is->tellg();
+        is->seekg(0, is->beg);
+    } else {
+        is = &cin;
     }
 
     try {
         bytesToRead = sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) + sizeof(PCMWaveHeader::format);
         data = readData(bytesToRead, forceStop, true);
+        if (forceStop) {
+            return;
+        }
         memcpy(headerData, &(*data)[0], bytesToRead);
         headerOffset = bytesToRead;
         delete data;
 
         if ((string(header.chunkID, 4) != string("RIFF")) || (string(header.format, 4) != string("WAVE"))) {
-            oss << "Error while opening " << filename << ", WAVE file expected";
+            oss << "Error while opening " << getFilename() << ", WAVE file expected";
             throw ErrorReporter(oss.str());
         }
 
         bytesToRead = sizeof(PCMWaveHeader::subchunk1ID) + sizeof(PCMWaveHeader::subchunk1Size);
         data = readData(bytesToRead, forceStop, true);
+        if (forceStop) {
+            return;
+        }
         memcpy(&headerData[headerOffset], &(*data)[0], bytesToRead);
         headerOffset += bytesToRead;
         delete data;
 
         unsigned subchunk1MinSize = sizeof(PCMWaveHeader) - headerOffset - sizeof(PCMWaveHeader::subchunk2ID) - sizeof(PCMWaveHeader::subchunk2Size);
         if ((string(header.subchunk1ID, 4) != string("fmt ")) || (header.subchunk1Size < subchunk1MinSize)) {
-            oss << "Error while opening " << filename << ", data corrupted";
+            oss << "Error while opening " << getFilename() << ", data corrupted";
             throw ErrorReporter(oss.str());
         }
 
         data = readData(header.subchunk1Size, forceStop, true);
+        if (forceStop) {
+            return;
+        }
         memcpy(&headerData[headerOffset], &(*data)[0], subchunk1MinSize);
         headerOffset += subchunk1MinSize;
         delete data;
@@ -94,73 +108,90 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
             (header.byteRate != (header.bitsPerSample >> 3) * header.channels * header.sampleRate) ||
             (header.blockAlign != (header.bitsPerSample >> 3) * header.channels) ||
             (((header.bitsPerSample >> 3) != 1) && ((header.bitsPerSample >> 3) != 2))) {
-            oss << "Error while opening " << filename << ", unsupported WAVE format";
+            oss << "Error while opening " << getFilename() << ", unsupported WAVE format";
             throw ErrorReporter(oss.str());
         }
 
         bytesToRead = sizeof(PCMWaveHeader::subchunk2ID) + sizeof(PCMWaveHeader::subchunk2Size);
         data = readData(bytesToRead, forceStop, true);
+        if (forceStop) {
+            return;
+        }
         memcpy(&headerData[headerOffset], &(*data)[0], bytesToRead);
         headerOffset += bytesToRead;
         delete data;
 
         if ((string(header.subchunk2ID, 4) != string("data")) || (header.subchunk2Size + ifs.tellg() < fileSize)) {
-            oss << "Error while opening " << filename << ", data corrupted";
+            oss << "Error while opening " << getFilename() << ", data corrupted";
             throw ErrorReporter(oss.str());
         }
     } catch (ErrorReporter &error) {
-        if (filename.empty()) {
+        if (!filename.empty()) {
             ifs.close();
         }
         throw error;
     }
 
-    dataOffset = ifs.tellg();
+    if (!filename.empty()) {
+        dataOffset = is->tellg();
+    }
 }
 
 WaveReader::~WaveReader()
 {
-    if (filename.empty()) {
+    if (!filename.empty()) {
         ifs.close();
     }
 }
 
-vector<char>* WaveReader::readData(unsigned bytesToRead, &bool forceStop, bool closeFileOnException)
+vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop, bool closeFileOnException)
 {
+    unsigned bytesRead = 0;
     vector<char>* data = new vector<char>();
     data->resize(bytesToRead);
 
-    if (fileSize < (unsigned)ifs.tellg() + bytesToRead) {
-        ostringstream oss;
-        oss << "Error while reading " << filename << ", data corrupted";
-        if (closeFileOnException) ifs.close();
-        throw ErrorReporter(oss.str());
+    while ((bytesRead < bytesToRead) && !forceStop) {
+        if (is->eof()) {
+            delete data;
+
+            if (closeFileOnException && !filename.empty()) {
+                ifs.close();
+            }
+
+            ostringstream oss;
+            oss << "Error while reading " << getFilename() << ", data corrupted";
+            throw ErrorReporter(oss.str());
+        }
+        bytesRead += is->readsome(&(*data)[0], bytesToRead - bytesRead);
     }
 
-    vector<char>* data = new vector<char>();
-    data->resize(bytesToRead);
-    ifs.read(&(*data)[0], bytesToRead);
+    if (forceStop) {
+        delete data;
+        data = NULL;
+    }
+
     return data;
 }
 
-vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset) {
+vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset, bool &forceStop) {
     unsigned bytesToRead, bytesLeft, bytesPerFrame, offset;
     vector<float>* frames = new vector<float>();
     vector<char>* data;
 
     bytesPerFrame = (header.bitsPerSample >> 3) * header.channels;
     bytesToRead = frameCount * bytesPerFrame;
-    bytesLeft = header.subchunk2Size - frameOffset * bytesPerFrame;
 
-    if (bytesToRead > bytesLeft) {
-        bytesToRead = bytesLeft - bytesLeft % bytesPerFrame;
-        frameCount = bytesToRead / bytesPerFrame;
+    if (!filename.empty()) {
+        bytesLeft = header.subchunk2Size - frameOffset * bytesPerFrame;
+        if (bytesToRead > bytesLeft) {
+            bytesToRead = bytesLeft - bytesLeft % bytesPerFrame;
+            frameCount = bytesToRead / bytesPerFrame;
+        }
+        is->seekg(dataOffset + frameOffset * bytesPerFrame);
     }
 
-    ifs.seekg(dataOffset + frameOffset * bytesPerFrame);
-
     try {
-        data = readData(bytesToRead, false);
+        data = readData(bytesToRead, forceStop, false);
     } catch (ErrorReporter &error) {
         delete frames;
         throw error;
@@ -190,6 +221,11 @@ vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset) 
 bool WaveReader::isEnd(unsigned frameOffset)
 {
     return header.subchunk2Size <= frameOffset * (header.bitsPerSample >> 3) * header.channels;
+}
+
+string WaveReader::getFilename()
+{
+    return filename.empty() ? "STDIN" : filename;
 }
 
 AudioFormat* WaveReader::getFormat()
