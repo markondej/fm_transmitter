@@ -36,7 +36,7 @@
 #include <sstream>
 #include <cmath>
 #include <string.h>
-#include <fcntl.h>
+#include <stdio.h>
 #include <sys/mman.h>
 
 using std::ostringstream;
