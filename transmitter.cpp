@@ -38,6 +38,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 
 using std::ostringstream;
