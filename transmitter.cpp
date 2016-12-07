@@ -108,7 +108,10 @@ void Transmitter::play(string filename, double frequency, bool loop)
         throw ErrorReporter("Cannot play, transmitter already in use");
     }
 
-    WaveReader* reader = new WaveReader(filename != "-" ? filename : string());
+    isTransmitting = true;
+    doStop = false;
+
+    WaveReader* reader = new WaveReader(filename != "-" ? filename : string(), doStop);
     AudioFormat* format = reader->getFormat();
     if (filename == "-") {
         usleep(STDIN_READ_DELAY);
@@ -118,9 +121,7 @@ void Transmitter::play(string filename, double frequency, bool loop)
     unsigned bufferFrames = (unsigned)((unsigned long long)format->sampleRate * BUFFER_TIME / 1000000);
 
     frameOffset = 0;
-    isTransmitting = true;
     isRestart = false;
-    doStop = false;
 
     buffer = reader->getFrames(bufferFrames, 0, doStop);
 
@@ -139,13 +140,13 @@ void Transmitter::play(string filename, double frequency, bool loop)
     usleep(BUFFER_TIME / 2);
 
     while (!doStop) {
-        while ((readStdin || !reader->isEnd(frameOffset + bufferFrames)) && !doStop) {
+        while (!reader->isEnd(frameOffset + bufferFrames) && !doStop) {
             if (buffer == NULL) {
                 buffer = reader->getFrames(bufferFrames, frameOffset + bufferFrames, doStop);
             }
             usleep(BUFFER_TIME / 2);
         }
-        if (loop && !readStdin && !doStop) {
+        if (loop && !doStop) {
             frameOffset = 0;
             isRestart = true;
             buffer = reader->getFrames(bufferFrames, 0, doStop);
@@ -243,7 +244,7 @@ void* Transmitter::transmit(void* params)
 
 AudioFormat* Transmitter::getFormat(string filename)
 {
-    WaveReader* reader = new WaveReader(filename);
+    WaveReader* reader = new WaveReader(filename, false);
     AudioFormat* format = file->getFormat();
     delete reader;
 
