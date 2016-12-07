@@ -244,9 +244,9 @@ void* Transmitter::transmit(void* params)
 
 AudioFormat* Transmitter::getFormat(string filename)
 {
-    doStop = false;
+    bool forceStop = false;
 
-    WaveReader* reader = new WaveReader(filename, doStop);
+    WaveReader* reader = new WaveReader(filename, forceStop);
     AudioFormat* format = reader->getFormat();
     delete reader;
 
