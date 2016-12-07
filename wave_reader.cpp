@@ -35,6 +35,7 @@
 #include "error_reporter.h"
 #include <sstream>
 #include <string.h>
+#include <unistd.h>
 #include <fcntl.h>
 
 using std::ostringstream;
