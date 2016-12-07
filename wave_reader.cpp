@@ -33,13 +33,12 @@
 
 #include "wave_reader.h"
 #include "error_reporter.h"
-#include <iostream>
 #include <sstream>
 #include <string.h>
+#include <fcntl.h>
 
 using std::ostringstream;
 using std::exception;
-using std::cin;
 
 WaveReader::WaveReader(string filename, bool &forceStop) :
     filename(filename), fileSize(0)
@@ -50,20 +49,19 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
     ostringstream oss;
 
     if (!filename.empty()) {
-        ifs.open(filename.c_str(), ifstream::binary);
-
-        if (!ifs.is_open()) {
-            oss << "Cannot open " << filename << ", file does not exist";
-            throw ErrorReporter(oss.str());
-        }
-
-        is = &ifs;
-
-        is->seekg(0, is->end);
-        fileSize = is->tellg();
-        is->seekg(0, is->beg);
+        fileDescriptor = open(filename.c_str(), O_RDONLY);
     } else {
-        is = &cin;
+        fileDescriptor = STDIN_FILENO;
+    }
+
+    if (fileDescriptor == -1) {
+        oss << "Cannot open " << getFilename() << ", file does not exist";
+        throw ErrorReporter(oss.str());
+    }
+
+    if (!filename.empty()) {
+        fileSize = lseek(fileDescriptor, 0, SEEK_END);
+        lseek(fileDescriptor, 0, SEEK_SET);
     }
 
     try {
@@ -121,26 +119,26 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
         headerOffset += bytesToRead;
         delete data;
 
-        if ((string(header.subchunk2ID, 4) != string("data")) || (header.subchunk2Size + ifs.tellg() < fileSize)) {
+        if ((string(header.subchunk2ID, 4) != string("data")) || (header.subchunk2Size + lseek(fileDescriptor, 0, SEEK_CUR) < fileSize)) {
             oss << "Error while opening " << getFilename() << ", data corrupted";
             throw ErrorReporter(oss.str());
         }
     } catch (ErrorReporter &error) {
         if (!filename.empty()) {
-            ifs.close();
+            close(fileDescriptor);
         }
         throw error;
     }
 
     if (!filename.empty()) {
-        dataOffset = is->tellg();
+        dataOffset = lseek(fileDescriptor, 0, SEEK_CUR);
     }
 }
 
 WaveReader::~WaveReader()
 {
     if (!filename.empty()) {
-        ifs.close();
+        close(fileDescriptor);
     }
 }
 
@@ -151,18 +149,19 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop, bool c
     data->resize(bytesToRead);
 
     while ((bytesRead < bytesToRead) && !forceStop) {
-        if (is->eof()) {
+        int bytes = read(fileDescriptor, &(*data)[0], bytesToRead - bytesRead);
+        if (bytes == -1) {
             delete data;
 
             if (closeFileOnException && !filename.empty()) {
-                ifs.close();
+                close(fileDescriptor);
             }
 
             ostringstream oss;
-            oss << "Error while reading " << getFilename() << ", data corrupted";
+            oss << "Error while reading " << getFilename() << ", file is corrupted";
             throw ErrorReporter(oss.str());
         }
-        bytesRead += is->readsome(&(*data)[0], bytesToRead - bytesRead);
+        bytesRead += bytes;
     }
 
     if (forceStop) {
@@ -187,7 +186,9 @@ vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset, 
             bytesToRead = bytesLeft - bytesLeft % bytesPerFrame;
             frameCount = bytesToRead / bytesPerFrame;
         }
-        is->seekg(dataOffset + frameOffset * bytesPerFrame);
+        if (lseek(fileDescriptor, dataOffset + frameOffset * bytesPerFrame, SEEK_SET) == -1) {
+            throw new ErrorReporter("File is corrupted!");
+        }
     }
 
     try {
