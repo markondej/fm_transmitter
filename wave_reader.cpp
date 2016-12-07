@@ -36,7 +36,7 @@
 #include <sstream>
 #include <string.h>
 #include <unistd.h>
-//#include <fcntl.h>
+#include <fcntl.h>
 
 using std::ostringstream;
 using std::exception;
