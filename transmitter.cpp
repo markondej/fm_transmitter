@@ -33,7 +33,6 @@
 
 #include "transmitter.h"
 #include "wave_reader.h"
-#include "stdin_reader.h"
 #include <sstream>
 #include <cmath>
 #include <string.h>
@@ -109,18 +108,9 @@ void Transmitter::play(string filename, double frequency, bool loop)
         throw ErrorReporter("Cannot play, transmitter already in use");
     }
 
-    WaveReader* file = NULL;
-    StdinReader* stdin = NULL;
-    AudioFormat* format;
-
-    bool readStdin = filename == "-";
-
-    if (!readStdin) {
-        file = new WaveReader(filename);
-        format = file->getFormat();
-    } else {
-        stdin = StdinReader::getInstance();
-        format = stdin->getFormat();
+    WaveReader* reader = new WaveReader(filename != "-" ? filename : string());
+    AudioFormat* format = reader->getFormat();
+    if (filename == "-") {
         usleep(STDIN_READ_DELAY);
     }
 
@@ -132,16 +122,14 @@ void Transmitter::play(string filename, double frequency, bool loop)
     isRestart = false;
     doStop = false;
 
-    buffer = (!readStdin) ? file->getFrames(bufferFrames, 0) : stdin->getFrames(bufferFrames, doStop);
+    buffer = reader->getFrames(bufferFrames, 0, doStop);
 
     pthread_t thread;
     void* params = (void*)&format->sampleRate;
 
     int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, params);
     if (returnCode) {
-        if (!readStdin) {
-            delete file;
-        }
+        delete reader;
         delete format;
         ostringstream oss;
         oss << "Cannot create new thread (code: " << returnCode << ")";
@@ -151,16 +139,16 @@ void Transmitter::play(string filename, double frequency, bool loop)
     usleep(BUFFER_TIME / 2);
 
     while (!doStop) {
-        while ((readStdin || !file->isEnd(frameOffset + bufferFrames)) && !doStop) {
+        while ((readStdin || !reader->isEnd(frameOffset + bufferFrames)) && !doStop) {
             if (buffer == NULL) {
-                buffer = (!readStdin) ? file->getFrames(bufferFrames, frameOffset + bufferFrames) : stdin->getFrames(bufferFrames, doStop);
+                buffer = reader->getFrames(bufferFrames, frameOffset + bufferFrames, doStop);
             }
             usleep(BUFFER_TIME / 2);
         }
         if (loop && !readStdin && !doStop) {
             frameOffset = 0;
             isRestart = true;
-            buffer = file->getFrames(bufferFrames, 0);
+            buffer = reader->getFrames(bufferFrames, 0, doStop);
             usleep(BUFFER_TIME / 2);
         } else {
             doStop = true;
@@ -170,9 +158,7 @@ void Transmitter::play(string filename, double frequency, bool loop)
 
     pthread_join(thread, NULL);
 
-    if (!readStdin) {
-        delete file;
-    }
+    delete reader;
     delete format;
 }
 
@@ -257,19 +243,10 @@ void* Transmitter::transmit(void* params)
 
 AudioFormat* Transmitter::getFormat(string filename)
 {
-    WaveReader* file;
-    StdinReader* stdin;
-    AudioFormat* format;
+    WaveReader* reader = new WaveReader(filename);
+    AudioFormat* format = file->getFormat();
+    delete reader;
 
-   if (filename != "-") {
-        file = new WaveReader(filename);
-        format = file->getFormat();
-        delete file;
-    } else {
-        stdin = StdinReader::getInstance();
-        format = stdin->getFormat();
-    }
-	
     return format;
 }
 
