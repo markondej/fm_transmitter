@@ -32,6 +32,7 @@
 */
 
 #include <iostream>
+#include "wave_reader.h"
 #include "transmitter.h"
 #include <cstdlib>
 #include <csignal>

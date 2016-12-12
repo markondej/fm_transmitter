@@ -38,6 +38,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <stdio.h>
+
 using std::ostringstream;
 using std::exception;
 
@@ -52,9 +54,9 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
     if (!filename.empty()) {
         fileDescriptor = open(filename.c_str(), O_RDONLY);
     } else {
-        fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL, 0) | O_NONBLOCK);
         fileDescriptor = STDIN_FILENO;
     }
+    fcntl(fileDescriptor, F_SETFL, fcntl(fileDescriptor, F_GETFL, 0) | O_NONBLOCK);
 
     if (fileDescriptor == -1) {
         oss << "Cannot open " << getFilename() << ", file does not exist";
@@ -151,8 +153,9 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop, bool c
     data->resize(bytesToRead);
 
     while ((bytesRead < bytesToRead) && !forceStop) {
-        int bytes = read(fileDescriptor, &(*data)[0], bytesToRead - bytesRead);
-        if (bytes == -1) {
+        int bytes = read(fileDescriptor, &(*data)[bytesRead], bytesToRead - bytesRead);
+        printf("BYTES: %d\n", bytes);
+        /*if (bytes == -1) {
             delete data;
 
             if (closeFileOnException && !filename.empty()) {
@@ -162,8 +165,10 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop, bool c
             ostringstream oss;
             oss << "Error while reading " << getFilename() << ", file is corrupted";
             throw ErrorReporter(oss.str());
+        }*/
+        if (bytes > 0) {
+            bytesRead += bytes;
         }
-        bytesRead += bytes;
     }
 
     if (forceStop) {
