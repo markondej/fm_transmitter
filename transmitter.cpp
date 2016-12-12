@@ -244,17 +244,6 @@ void* Transmitter::transmit(void* params)
     return NULL;
 }
 
-AudioFormat* Transmitter::getFormat(string filename)
-{
-    bool forceStop = false;
-
-    WaveReader* reader = new WaveReader(filename, forceStop);
-    AudioFormat* format = reader->getFormat();
-    delete reader;
-
-    return format;
-}
-
 void Transmitter::stop()
 {
     doStop = true;

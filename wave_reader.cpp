@@ -52,6 +52,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
     if (!filename.empty()) {
         fileDescriptor = open(filename.c_str(), O_RDONLY);
     } else {
+        fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL, 0) | O_NONBLOCK);
         fileDescriptor = STDIN_FILENO;
     }
 
