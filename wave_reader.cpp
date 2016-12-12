@@ -38,6 +38,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <errno.h>
 #include <stdio.h>
 
 using std::ostringstream;
@@ -54,22 +55,23 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
     if (!filename.empty()) {
         fileDescriptor = open(filename.c_str(), O_RDONLY);
     } else {
+        fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL, 0) | O_NONBLOCK);
         fileDescriptor = STDIN_FILENO;
     }
-    fcntl(fileDescriptor, F_SETFL, fcntl(fileDescriptor, F_GETFL, 0) | O_NONBLOCK);
 
     if (fileDescriptor == -1) {
         oss << "Cannot open " << getFilename() << ", file does not exist";
         throw ErrorReporter(oss.str());
     }
 
-    if (!filename.empty()) {
+    if (fileDescriptor != STDIN_FILENO) {
         fileSize = lseek(fileDescriptor, 0, SEEK_END);
         lseek(fileDescriptor, 0, SEEK_SET);
     }
 
     try {
-        bytesToRead = sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) + sizeof(PCMWaveHeader::format);
+        bytesToRead = sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) +
+            sizeof(PCMWaveHeader::format);
         data = readData(bytesToRead, forceStop, true);
         if (forceStop) {
             return;
@@ -92,7 +94,9 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
         headerOffset += bytesToRead;
         delete data;
 
-        unsigned subchunk1MinSize = sizeof(PCMWaveHeader) - headerOffset - sizeof(PCMWaveHeader::subchunk2ID) - sizeof(PCMWaveHeader::subchunk2Size);
+        unsigned subchunk1MinSize = sizeof(PCMWaveHeader::audioFormat) + sizeof(PCMWaveHeader::channels) +
+            sizeof(PCMWaveHeader::sampleRate) + sizeof(PCMWaveHeader::byteRate) + sizeof(PCMWaveHeader::blockAlign) +
+            sizeof(PCMWaveHeader::bitsPerSample);
         if ((string(header.subchunk1ID, 4) != string("fmt ")) || (header.subchunk1Size < subchunk1MinSize)) {
             oss << "Error while opening " << getFilename() << ", data corrupted";
             throw ErrorReporter(oss.str());
@@ -123,25 +127,25 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
         headerOffset += bytesToRead;
         delete data;
 
-        if ((string(header.subchunk2ID, 4) != string("data")) || (header.subchunk2Size + lseek(fileDescriptor, 0, SEEK_CUR) < fileSize)) {
+        if (string(header.subchunk2ID, 4) != string("data")) {
             oss << "Error while opening " << getFilename() << ", data corrupted";
             throw ErrorReporter(oss.str());
         }
     } catch (ErrorReporter &error) {
-        if (!filename.empty()) {
+        if (fileDescriptor != STDIN_FILENO) {
             close(fileDescriptor);
         }
         throw error;
     }
 
-    if (!filename.empty()) {
+    if (!fileDescriptor != STDIN_FILENO) {
         dataOffset = lseek(fileDescriptor, 0, SEEK_CUR);
     }
 }
 
 WaveReader::~WaveReader()
 {
-    if (!filename.empty()) {
+    if (!fileDescriptor != STDIN_FILENO) {
         close(fileDescriptor);
     }
 }
@@ -155,6 +159,9 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop, bool c
     while ((bytesRead < bytesToRead) && !forceStop) {
         int bytes = read(fileDescriptor, &(*data)[bytesRead], bytesToRead - bytesRead);
         printf("BYTES: %d\n", bytes);
+        if (bytes == -1) {
+            printf("ERROR: %d\n", errno);
+        }
         /*if (bytes == -1) {
             delete data;
 
@@ -187,7 +194,7 @@ vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset, 
     bytesPerFrame = (header.bitsPerSample >> 3) * header.channels;
     bytesToRead = frameCount * bytesPerFrame;
 
-    if (!filename.empty()) {
+    if (fileDescriptor != STDIN_FILENO) {
         bytesLeft = header.subchunk2Size - frameOffset * bytesPerFrame;
         if (bytesToRead > bytesLeft) {
             bytesToRead = bytesLeft - bytesLeft % bytesPerFrame;
@@ -233,7 +240,7 @@ bool WaveReader::isEnd(unsigned frameOffset)
 
 string WaveReader::getFilename()
 {
-    return filename.empty() ? "STDIN" : filename;
+    return fileDescriptor != STDIN_FILENO ? filename : "STDIN";
 }
 
 AudioFormat* WaveReader::getFormat()

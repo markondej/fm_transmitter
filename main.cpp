@@ -39,11 +39,11 @@
 
 using namespace std;
 
+bool stop = false;
 Transmitter* transmitter = NULL;
 
 AudioFormat* getFormat(string filename) {
-    bool doStop = false;
-    WaveReader* reader = new WaveReader(filename, doStop);
+    WaveReader* reader = new WaveReader(filename, stop);
     AudioFormat* format = reader->getFormat();
     delete reader;
     return format;
@@ -54,6 +54,7 @@ void sigIntHandler(int sigNum)
     if (transmitter != NULL) {
         cout << "Stopping..." << endl;
         transmitter->stop();
+        stop = true;
     }
 }
 
