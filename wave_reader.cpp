@@ -138,7 +138,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
         throw error;
     }
 
-    if (!fileDescriptor != STDIN_FILENO) {
+    if (fileDescriptor != STDIN_FILENO) {
         dataOffset = lseek(fileDescriptor, 0, SEEK_CUR);
     }
 }
