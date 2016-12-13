@@ -126,7 +126,7 @@ void Transmitter::play(string filename, double frequency, bool loop)
     isRestart = false;
 
     vector<float>* frames = reader->getFrames(bufferFrames, 0, doStop);
-    isEof = frames.size() < bufferFrames;
+    isEof = frames->size() < bufferFrames;
     buffer = frames;
 
     pthread_t thread;
@@ -147,7 +147,7 @@ void Transmitter::play(string filename, double frequency, bool loop)
         while (!isEof && !doStop) {
             if (buffer == NULL) {
                 frames = reader->getFrames(bufferFrames, frameOffset + bufferFrames, doStop);
-                isEof = frames.size() < bufferFrames;
+                isEof = frames->size() < bufferFrames;
                 buffer = frames;
             }
             usleep(BUFFER_TIME / 2);
@@ -155,8 +155,8 @@ void Transmitter::play(string filename, double frequency, bool loop)
         if (loop && !doStop) {
             frameOffset = 0;
             isRestart = true;
-            buffer = reader->getFrames(bufferFrames, 0, doStop);
-            isEof = frames.size() < bufferFrames;
+            frames = reader->getFrames(bufferFrames, 0, doStop);
+            isEof = frames->size() < bufferFrames;
             buffer = frames;
             usleep(BUFFER_TIME / 2);
         } else {
