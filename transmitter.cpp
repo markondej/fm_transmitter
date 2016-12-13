@@ -125,7 +125,9 @@ void Transmitter::play(string filename, double frequency, bool loop)
     frameOffset = 0;
     isRestart = false;
 
-    buffer = reader->getFrames(bufferFrames, 0, doStop);
+    vector<float>* frames = reader->getFrames(bufferFrames, 0, doStop);
+    isEof = frames.size() < bufferFrames;
+    buffer = frames;
 
     pthread_t thread;
     void* params = (void*)&format->sampleRate;
@@ -142,9 +144,11 @@ void Transmitter::play(string filename, double frequency, bool loop)
     usleep(BUFFER_TIME / 2);
 
     while (!doStop) {
-        while (!reader->isEnd(frameOffset + bufferFrames) && !doStop) {
+        while (!isEof && !doStop) {
             if (buffer == NULL) {
-                buffer = reader->getFrames(bufferFrames, frameOffset + bufferFrames, doStop);
+                frames = reader->getFrames(bufferFrames, frameOffset + bufferFrames, doStop);
+                isEof = frames.size() < bufferFrames;
+                buffer = frames;
             }
             usleep(BUFFER_TIME / 2);
         }
@@ -152,6 +156,8 @@ void Transmitter::play(string filename, double frequency, bool loop)
             frameOffset = 0;
             isRestart = true;
             buffer = reader->getFrames(bufferFrames, 0, doStop);
+            isEof = frames.size() < bufferFrames;
+            buffer = frames;
             usleep(BUFFER_TIME / 2);
         } else {
             doStop = true;
@@ -170,8 +176,8 @@ void* Transmitter::transmit(void* params)
     unsigned long long current, start, playbackStart;
     unsigned offset, length, temp;
     vector<float>* frames = NULL;
-    float value = 0.0;
     float* data;
+    float value;
 #ifndef NO_PREEMP
     float prevValue = 0.0;
 #endif

@@ -56,7 +56,7 @@ class Transmitter
     private:
         Transmitter();
 
-        bool doStop;
+        bool doStop, isEof;
 
         static void* peripherals;
         static vector<float>* buffer;
