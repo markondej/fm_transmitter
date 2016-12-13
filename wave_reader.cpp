@@ -170,8 +170,8 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop)
             oss << "Error while reading " << getFilename() << ", file is corrupted";
             throw ErrorReporter(oss.str());
         }
-        if ((bytes == 0) && (fileDescriptor != STDIN_FILENO)) {
-            data->resize(bytesRead);
+        if ((bytes < bytesToRead - bytesRead) && (fileDescriptor != STDIN_FILENO)) {
+            data->resize(bytes);
             break;
         }
         if (bytes > 0) {
