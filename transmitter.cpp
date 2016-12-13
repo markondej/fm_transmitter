@@ -53,7 +53,7 @@ using std::ostringstream;
 #define ACCESS(base, offset) *(volatile unsigned*)((int)base + offset)
 #define ACCESS64(base, offset) *(volatile unsigned long long*)((int)base + offset)
 
-bool Transmitter::transmitting = false;
+bool Transmitter::isTransmitting = false;
 bool Transmitter::restart = false;
 unsigned Transmitter::clockDivisor = 0;
 unsigned Transmitter::frameOffset = 0;
@@ -106,11 +106,11 @@ Transmitter* Transmitter::getInstance()
 
 void Transmitter::play(string filename, double frequency, bool loop)
 {
-    if (transmitting) {
+    if (isTransmitting) {
         throw ErrorReporter("Cannot play, transmitter already in use");
     }
 
-    transmitting = true;
+    isTransmitting = true;
     forceStop = false;
 
     WaveReader* reader = new WaveReader(filename != "-" ? filename : string(), forceStop);
@@ -175,7 +175,7 @@ void Transmitter::play(string filename, double frequency, bool loop)
             forceStop = true;
         }
     }
-    transmitting = false;
+    isTransmitting = false;
 
     pthread_join(thread, NULL);
 
@@ -206,13 +206,13 @@ void* Transmitter::transmit(void* params)
     playbackStart = ACCESS64(peripherals, TCNT_BASE);
     current = playbackStart;
 
-    while (transmitting) {
+    while (isTransmitting) {
         start = current;
-        while ((buffer == NULL) && transmitting) {
+        while ((buffer == NULL) && isTransmitting) {
             usleep(1);
             current = ACCESS64(peripherals, TCNT_BASE);
         }
-        if (!transmitting) {
+        if (!isTransmitting) {
             break;
         }
         if (restart) {

@@ -60,7 +60,7 @@ class Transmitter
 
         static void* peripherals;
         static vector<float>* buffer;
-        static bool transmitting, restart;
+        static bool isTransmitting, restart;
         static unsigned frameOffset, clockDivisor;
         static void* transmit(void* params);
 };
