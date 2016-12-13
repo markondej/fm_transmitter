@@ -57,7 +57,7 @@ class WaveReader
         int fileDescriptor;
         bool isHeaderRead;
 
-        vector<char>* readData(unsigned bytesToRead, bool &forceStop, bool closeFileOnException);
+        vector<char>* readData(unsigned bytesToRead, bool &forceStop);
         string getFilename();
 };
 
