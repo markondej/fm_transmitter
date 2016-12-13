@@ -111,9 +111,9 @@ void Transmitter::play(string filename, double frequency, bool loop)
     }
 
     transmitting = true;
-    stop = false;
+    forceStop = false;
 
-    WaveReader* reader = new WaveReader(filename != "-" ? filename : string(), doStop);
+    WaveReader* reader = new WaveReader(filename != "-" ? filename : string(), forceStop);
     AudioFormat* format = reader->getFormat();
     if (filename == "-") {
         usleep(STDIN_READ_DELAY);
@@ -125,9 +125,15 @@ void Transmitter::play(string filename, double frequency, bool loop)
     frameOffset = 0;
     restart = false;
 
-    vector<float>* frames = reader->getFrames(bufferFrames, 0, doStop);
-    eof = frames->size() < bufferFrames;
-    buffer = frames;
+    vector<float>* frames = reader->getFrames(bufferFrames, 0, forceStop);
+    if (!forceStop) {
+        eof = frames->size() < bufferFrames;
+        buffer = frames;
+    } else {
+        delete format;
+        delete reader;
+        return;
+    }
 
     pthread_t thread;
     void* params = (void*)&format->sampleRate;
@@ -143,24 +149,30 @@ void Transmitter::play(string filename, double frequency, bool loop)
 
     usleep(BUFFER_TIME / 2);
 
-    while (!stop) {
-        while (!eof && !stop) {
+    while (!forceStop) {
+        while (!eof && !forceStop) {
             if (buffer == NULL) {
-                frames = reader->getFrames(bufferFrames, frameOffset + bufferFrames, stop);
-                eof = frames->size() < bufferFrames;
-                buffer = frames;
+                frames = reader->getFrames(bufferFrames, frameOffset + bufferFrames, forceStop);
+                if (!forceStop) {
+                    eof = frames->size() < bufferFrames;
+                    buffer = frames;
+                }
             }
-            usleep(BUFFER_TIME / 2);
+            if (!forceStop) {
+                usleep(BUFFER_TIME / 2);
+            }
         }
-        if (loop && !doStop) {
+        if (loop && !forceStop) {
             frameOffset = 0;
             restart = true;
-            frames = reader->getFrames(bufferFrames, 0, stop);
-            eof = frames->size() < bufferFrames;
-            buffer = frames;
-            usleep(BUFFER_TIME / 2);
+            frames = reader->getFrames(bufferFrames, 0, forceStop);
+            if (!forceStop) {
+                eof = frames->size() < bufferFrames;
+                buffer = frames;
+                usleep(BUFFER_TIME / 2);
+            }
         } else {
-            stop = true;
+            forceStop = true;
         }
     }
     transmitting = false;
@@ -252,5 +264,5 @@ void* Transmitter::transmit(void* params)
 
 void Transmitter::stop()
 {
-    stop = true;
+    forceStop = true;
 }
