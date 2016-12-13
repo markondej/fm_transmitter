@@ -145,7 +145,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
 
 WaveReader::~WaveReader()
 {
-    if (!fileDescriptor != STDIN_FILENO) {
+    if (fileDescriptor != STDIN_FILENO) {
         close(fileDescriptor);
     }
 }
