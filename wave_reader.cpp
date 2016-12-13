@@ -177,6 +177,9 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop)
         if (bytes > 0) {
             bytesRead += bytes;
         }
+        if (bytesRead < bytesToRead) {
+            usleep(1);
+        }
     }
 
     if (forceStop) {

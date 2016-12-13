@@ -53,8 +53,8 @@ using std::ostringstream;
 #define ACCESS(base, offset) *(volatile unsigned*)((int)base + offset)
 #define ACCESS64(base, offset) *(volatile unsigned long long*)((int)base + offset)
 
-bool Transmitter::isTransmitting = false;
-bool Transmitter::isRestart = false;
+bool Transmitter::transmitting = false;
+bool Transmitter::restart = false;
 unsigned Transmitter::clockDivisor = 0;
 unsigned Transmitter::frameOffset = 0;
 vector<float>* Transmitter::buffer = NULL;
@@ -106,12 +106,12 @@ Transmitter* Transmitter::getInstance()
 
 void Transmitter::play(string filename, double frequency, bool loop)
 {
-    if (isTransmitting) {
+    if (transmitting) {
         throw ErrorReporter("Cannot play, transmitter already in use");
     }
 
-    isTransmitting = true;
-    doStop = false;
+    transmitting = true;
+    stop = false;
 
     WaveReader* reader = new WaveReader(filename != "-" ? filename : string(), doStop);
     AudioFormat* format = reader->getFormat();
@@ -123,10 +123,10 @@ void Transmitter::play(string filename, double frequency, bool loop)
     unsigned bufferFrames = (unsigned)((unsigned long long)format->sampleRate * BUFFER_TIME / 1000000);
 
     frameOffset = 0;
-    isRestart = false;
+    restart = false;
 
     vector<float>* frames = reader->getFrames(bufferFrames, 0, doStop);
-    isEof = frames->size() < bufferFrames;
+    eof = frames->size() < bufferFrames;
     buffer = frames;
 
     pthread_t thread;
@@ -143,27 +143,27 @@ void Transmitter::play(string filename, double frequency, bool loop)
 
     usleep(BUFFER_TIME / 2);
 
-    while (!doStop) {
-        while (!isEof && !doStop) {
+    while (!stop) {
+        while (!eof && !stop) {
             if (buffer == NULL) {
-                frames = reader->getFrames(bufferFrames, frameOffset + bufferFrames, doStop);
-                isEof = frames->size() < bufferFrames;
+                frames = reader->getFrames(bufferFrames, frameOffset + bufferFrames, stop);
+                eof = frames->size() < bufferFrames;
                 buffer = frames;
             }
             usleep(BUFFER_TIME / 2);
         }
         if (loop && !doStop) {
             frameOffset = 0;
-            isRestart = true;
-            frames = reader->getFrames(bufferFrames, 0, doStop);
-            isEof = frames->size() < bufferFrames;
+            restart = true;
+            frames = reader->getFrames(bufferFrames, 0, stop);
+            eof = frames->size() < bufferFrames;
             buffer = frames;
             usleep(BUFFER_TIME / 2);
         } else {
-            doStop = true;
+            stop = true;
         }
     }
-    isTransmitting = false;
+    transmitting = false;
 
     pthread_join(thread, NULL);
 
@@ -194,19 +194,19 @@ void* Transmitter::transmit(void* params)
     playbackStart = ACCESS64(peripherals, TCNT_BASE);
     current = playbackStart;
 
-    while (isTransmitting) {
+    while (transmitting) {
         start = current;
-        while ((buffer == NULL) && isTransmitting) {
+        while ((buffer == NULL) && transmitting) {
             usleep(1);
             current = ACCESS64(peripherals, TCNT_BASE);
         }
-        if (!isTransmitting) {
+        if (!transmitting) {
             break;
         }
-        if (isRestart) {
+        if (restart) {
             playbackStart = current;
             start = current;
-            isRestart = false;
+            restart = false;
         }
         frames = buffer;
         frameOffset = (current - playbackStart) * (sampleRate) / 1000000;
@@ -252,5 +252,5 @@ void* Transmitter::transmit(void* params)
 
 void Transmitter::stop()
 {
-    doStop = true;
+    stop = true;
 }
