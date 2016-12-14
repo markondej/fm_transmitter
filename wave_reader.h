@@ -55,7 +55,6 @@ class WaveReader
         PCMWaveHeader header;
         unsigned fileSize, dataOffset;
         int fileDescriptor;
-        bool isHeaderRead;
 
         vector<char>* readData(unsigned bytesToRead, bool &forceStop);
         string getFilename();

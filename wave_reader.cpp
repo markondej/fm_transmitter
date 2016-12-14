@@ -43,7 +43,7 @@ using std::ostringstream;
 using std::exception;
 
 WaveReader::WaveReader(string filename, bool &forceStop) :
-    filename(filename), fileSize(0), isHeaderRead(false)
+    filename(filename), fileSize(0), headerComplete(false)
 {
     char* headerData = (char*)((void*)&header);
     vector<char>* data;
@@ -71,8 +71,8 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
         bytesToRead = sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) +
             sizeof(PCMWaveHeader::format);
         data = readData(bytesToRead, forceStop);
-        if (forceStop) {
-            return;
+        if (data == NULL) {
+            throw ErrorReporter("Cannot obtain header, program interrupted");
         }
         memcpy(headerData, &(*data)[0], bytesToRead);
         headerOffset = bytesToRead;
@@ -85,8 +85,8 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
 
         bytesToRead = sizeof(PCMWaveHeader::subchunk1ID) + sizeof(PCMWaveHeader::subchunk1Size);
         data = readData(bytesToRead, forceStop);
-        if (forceStop) {
-            return;
+        if (data == NULL) {
+            throw ErrorReporter("Cannot obtain header, program interrupted");
         }
         memcpy(&headerData[headerOffset], &(*data)[0], bytesToRead);
         headerOffset += bytesToRead;
@@ -101,8 +101,8 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
         }
 
         data = readData(header.subchunk1Size, forceStop);
-        if (forceStop) {
-            return;
+        if (data == NULL) {
+            throw ErrorReporter("Cannot obtain header, program interrupted");
         }
         memcpy(&headerData[headerOffset], &(*data)[0], subchunk1MinSize);
         headerOffset += subchunk1MinSize;
@@ -118,8 +118,8 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
 
         bytesToRead = sizeof(PCMWaveHeader::subchunk2ID) + sizeof(PCMWaveHeader::subchunk2Size);
         data = readData(bytesToRead, forceStop);
-        if (forceStop) {
-            return;
+        if (data == NULL) {
+            throw ErrorReporter("Cannot obtain header, program interrupted");
         }
         memcpy(&headerData[headerOffset], &(*data)[0], bytesToRead);
         headerOffset += bytesToRead;
@@ -129,8 +129,6 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
             oss << "Error while opening " << getFilename() << ", data corrupted";
             throw ErrorReporter(oss.str());
         }
-
-        isHeaderRead = true;
     } catch (ErrorReporter &error) {
         if (fileDescriptor != STDIN_FILENO) {
             close(fileDescriptor);
@@ -150,6 +148,10 @@ WaveReader::~WaveReader()
     }
 }
 
+bool WaveReader::isHeaderLoaded() {
+    return isHeader;
+}
+
 vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop)
 {
     unsigned bytesRead = 0;
@@ -162,7 +164,7 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop)
             ((bytes == 0) && !isHeaderRead && (fileDescriptor != STDIN_FILENO))) {
             delete data;
 
-            if (!isHeaderRead && (fileDescriptor != STDIN_FILENO)) {
+            if (fileDescriptor != STDIN_FILENO) {
                 close(fileDescriptor);
             }
 
@@ -170,14 +172,14 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop)
             oss << "Error while reading " << getFilename() << ", file is corrupted";
             throw ErrorReporter(oss.str());
         }
-        if ((bytes == 0) && (fileDescriptor != STDIN_FILENO)) {
-            data->resize(bytes);
-            break;
-        }
         if (bytes > 0) {
             bytesRead += bytes;
         }
         if (bytesRead < bytesToRead) {
+            if (fileDescriptor != STDIN_FILENO) {
+                data->resize(bytes);
+                break;
+            }
             usleep(1);
         }
     }
@@ -192,12 +194,6 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop)
 
 vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset, bool &forceStop) {
     unsigned bytesToRead, bytesLeft, bytesPerFrame, offset;
-
-    if (!isHeaderRead) {
-        ostringstream oss;
-        throw ErrorReporter("Header wasn't read successfully!");
-    }
-
     vector<float>* frames = new vector<float>();
     vector<char>* data;
 
@@ -221,7 +217,7 @@ vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset, 
         delete frames;
         throw error;
     }
-    if (forceStop) {
+    if (data == NULL) {
         delete frames;
         return NULL;
     }
