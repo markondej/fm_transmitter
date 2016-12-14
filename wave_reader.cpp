@@ -43,7 +43,7 @@ using std::ostringstream;
 using std::exception;
 
 WaveReader::WaveReader(string filename, bool &forceStop) :
-    filename(filename), fileSize(0), headerComplete(false)
+    filename(filename)
 {
     char* headerData = (char*)((void*)&header);
     vector<char>* data;
@@ -60,11 +60,6 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
     if (fileDescriptor == -1) {
         oss << "Cannot open " << getFilename() << ", file does not exist";
         throw ErrorReporter(oss.str());
-    }
-
-    if (fileDescriptor != STDIN_FILENO) {
-        fileSize = lseek(fileDescriptor, 0, SEEK_END);
-        lseek(fileDescriptor, 0, SEEK_SET);
     }
 
     try {
@@ -146,10 +141,6 @@ WaveReader::~WaveReader()
     if (fileDescriptor != STDIN_FILENO) {
         close(fileDescriptor);
     }
-}
-
-bool WaveReader::isHeaderLoaded() {
-    return isHeader;
 }
 
 vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop)
