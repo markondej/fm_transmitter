@@ -56,7 +56,7 @@ class WaveReader
         unsigned dataOffset;
         int fileDescriptor;
 
-        vector<char>* readData(unsigned bytesToRead, bool &forceStop);
+        vector<char>* readData(unsigned bytesToRead, bool requireAll, bool &forceStop);
         string getFilename();
 };
 

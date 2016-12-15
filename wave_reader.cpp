@@ -65,7 +65,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
     try {
         bytesToRead = sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) +
             sizeof(PCMWaveHeader::format);
-        data = readData(bytesToRead, forceStop);
+        data = readData(bytesToRead, true, forceStop);
         if (data == NULL) {
             throw ErrorReporter("Cannot obtain header, program interrupted");
         }
@@ -79,7 +79,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
         }
 
         bytesToRead = sizeof(PCMWaveHeader::subchunk1ID) + sizeof(PCMWaveHeader::subchunk1Size);
-        data = readData(bytesToRead, forceStop);
+        data = readData(bytesToRead, true, forceStop);
         if (data == NULL) {
             throw ErrorReporter("Cannot obtain header, program interrupted");
         }
@@ -95,7 +95,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
             throw ErrorReporter(oss.str());
         }
 
-        data = readData(header.subchunk1Size, forceStop);
+        data = readData(header.subchunk1Size, true, forceStop);
         if (data == NULL) {
             throw ErrorReporter("Cannot obtain header, program interrupted");
         }
@@ -112,7 +112,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
         }
 
         bytesToRead = sizeof(PCMWaveHeader::subchunk2ID) + sizeof(PCMWaveHeader::subchunk2Size);
-        data = readData(bytesToRead, forceStop);
+        data = readData(bytesToRead, true, forceStop);
         if (data == NULL) {
             throw ErrorReporter("Cannot obtain header, program interrupted");
         }
@@ -143,7 +143,7 @@ WaveReader::~WaveReader()
     }
 }
 
-vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop)
+vector<char>* WaveReader::readData(unsigned bytesToRead, bool requireAll, bool &forceStop)
 {
     unsigned bytesRead = 0;
     vector<char>* data = new vector<char>();
@@ -152,7 +152,7 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool &forceStop)
     while ((bytesRead < bytesToRead) && !forceStop) {
         int bytes = read(fileDescriptor, &(*data)[bytesRead], bytesToRead - bytesRead);
         if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
-            ((bytes == 0) && !isHeaderRead && (fileDescriptor != STDIN_FILENO))) {
+            ((bytes < bytesToRead) && requireAll && (fileDescriptor != STDIN_FILENO))) {
             delete data;
 
             if (fileDescriptor != STDIN_FILENO) {
@@ -203,7 +203,7 @@ vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset, 
     }
 
     try {
-        data = readData(bytesToRead, forceStop);
+        data = readData(bytesToRead, false, forceStop);
     } catch (ErrorReporter &error) {
         delete frames;
         throw error;
