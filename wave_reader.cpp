@@ -152,7 +152,7 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool requireAll, bool &
     while ((bytesRead < bytesToRead) && !forceStop) {
         int bytes = read(fileDescriptor, &(*data)[bytesRead], bytesToRead - bytesRead);
         if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
-            ((bytes < bytesToRead) && requireAll && (fileDescriptor != STDIN_FILENO))) {
+            (((unsigned)bytes < bytesToRead) && requireAll && (fileDescriptor != STDIN_FILENO))) {
             delete data;
 
             if (fileDescriptor != STDIN_FILENO) {
