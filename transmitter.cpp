@@ -111,7 +111,7 @@ void Transmitter::play(string filename, double frequency, bool loop)
     transmitting = true;
     forceStop = false;
 
-    WaveReader* reader = reader = new WaveReader(filename != "-" ? filename : string(), forceStop);
+    WaveReader* reader = new WaveReader(filename != "-" ? filename : string(), forceStop);
     AudioFormat* format = reader->getFormat();
 
     clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
