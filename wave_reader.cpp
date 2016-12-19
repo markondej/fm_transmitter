@@ -43,7 +43,7 @@ using std::ostringstream;
 using std::exception;
 
 WaveReader::WaveReader(string filename, bool &forceStop) :
-    filename(filename)
+    filename(filename), currentOffset(0)
 {
     char* headerData = (char*)((void*)&header);
     vector<char>* data;
@@ -143,7 +143,7 @@ WaveReader::~WaveReader()
     }
 }
 
-vector<char>* WaveReader::readData(unsigned bytesToRead, bool requireAll, bool &forceStop)
+vector<char>* WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool &forceStop)
 {
     unsigned bytesRead = 0;
     vector<char>* data = new vector<char>();
@@ -152,7 +152,7 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool requireAll, bool &
     while ((bytesRead < bytesToRead) && !forceStop) {
         int bytes = read(fileDescriptor, &(*data)[bytesRead], bytesToRead - bytesRead);
         if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
-            (((unsigned)bytes < bytesToRead) && requireAll && (fileDescriptor != STDIN_FILENO))) {
+            (((unsigned)bytes < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
             delete data;
 
             if (fileDescriptor != STDIN_FILENO) {
@@ -175,6 +175,10 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool requireAll, bool &
         }
     }
 
+    if (!headerBytes) {
+        currentOffset += bytesRead;
+    }
+
     if (forceStop) {
         delete data;
         data = NULL;
@@ -183,23 +187,17 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool requireAll, bool &
     return data;
 }
 
-vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset, bool &forceStop) {
+vector<float>* WaveReader::getFrames(unsigned frameCount, bool &forceStop) {
     unsigned bytesToRead, bytesLeft, bytesPerFrame, offset;
     vector<float>* frames = new vector<float>();
     vector<char>* data;
 
     bytesPerFrame = (header.bitsPerSample >> 3) * header.channels;
     bytesToRead = frameCount * bytesPerFrame;
-
-    if (fileDescriptor != STDIN_FILENO) {
-        bytesLeft = header.subchunk2Size - frameOffset * bytesPerFrame;
-        if (bytesToRead > bytesLeft) {
-            bytesToRead = bytesLeft - bytesLeft % bytesPerFrame;
-            frameCount = bytesToRead / bytesPerFrame;
-        }
-        if (lseek(fileDescriptor, dataOffset + frameOffset * bytesPerFrame, SEEK_SET) == -1) {
-            return frames;
-        }
+    bytesLeft = header.subchunk2Size - currentOffset;
+    if (bytesToRead > bytesLeft) {
+        bytesToRead = bytesLeft - bytesLeft % bytesPerFrame;
+        frameCount = bytesToRead / bytesPerFrame;
     }
 
     try {
@@ -235,6 +233,16 @@ vector<float>* WaveReader::getFrames(unsigned frameCount, unsigned frameOffset, 
 
     delete data;
     return frames;
+}
+
+bool WaveReader::setFrameOffset(unsigned frameOffset) {
+    if (fileDescriptor != STDIN_FILENO) {
+        currentOffset = frameOffset * (header.bitsPerSample >> 3) * header.channels;
+        if (lseek(fileDescriptor, dataOffset + currentOffset, SEEK_SET) == -1) {
+            return false;
+        }
+    }
+    return true;
 }
 
 string WaveReader::getFilename()

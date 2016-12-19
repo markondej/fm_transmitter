@@ -43,6 +43,7 @@ bool stop = false;
 Transmitter* transmitter = NULL;
 
 AudioFormat* getFormat(string filename) {
+    stop = false;
     WaveReader* reader = new WaveReader(filename, stop);
     AudioFormat* format = reader->getFormat();
     delete reader;

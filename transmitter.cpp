@@ -121,7 +121,7 @@ void Transmitter::play(string filename, double frequency, bool loop)
     restart = false;
 
     try {
-        vector<float>* frames = reader->getFrames(bufferFrames, 0, forceStop);
+        vector<float>* frames = reader->getFrames(bufferFrames, forceStop);
         if (frames == NULL) {
             delete format;
             delete reader;
@@ -148,7 +148,10 @@ void Transmitter::play(string filename, double frequency, bool loop)
         while (!forceStop) {
             while (!eof && !forceStop) {
                 if (buffer == NULL) {
-                    frames = reader->getFrames(bufferFrames, frameOffset + bufferFrames, forceStop);
+                    if (!reader->setFrameOffset(frameOffset + bufferFrames)) {
+                        break;
+                    }
+                    frames = reader->getFrames(bufferFrames, forceStop);
                     if (frames == NULL) {
                         forceStop = true;
                         break;
@@ -161,7 +164,10 @@ void Transmitter::play(string filename, double frequency, bool loop)
             if (loop && !forceStop) {
                 frameOffset = 0;
                 restart = true;
-                frames = reader->getFrames(bufferFrames, 0, forceStop);
+                if (reader->setFrameOffset(0)) {
+                    break;
+                }
+                frames = reader->getFrames(bufferFrames, forceStop);
                 if (frames == NULL) {
                     break;
                 }

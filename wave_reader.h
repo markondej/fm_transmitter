@@ -49,14 +49,15 @@ class WaveReader
         virtual ~WaveReader();
 
         AudioFormat* getFormat();
-        vector<float>* getFrames(unsigned frameCount, unsigned frameOffset, bool &forceStop);
+        vector<float>* getFrames(unsigned frameCount, bool &forceStop);
+        bool setFrameOffset(unsigned frameOffset);
     private:
         string filename;
         PCMWaveHeader header;
-        unsigned dataOffset;
+        unsigned dataOffset, currentOffset;
         int fileDescriptor;
 
-        vector<char>* readData(unsigned bytesToRead, bool requireAll, bool &forceStop);
+        vector<char>* readData(unsigned bytesToRead, bool headerBytes, bool &forceStop);
         string getFilename();
 };
 
