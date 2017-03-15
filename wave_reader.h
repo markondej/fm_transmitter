@@ -36,30 +36,29 @@
 
 #include <string>
 #include <vector>
-#include <fstream>
 #include "audio_format.h"
 #include "pcm_wave_header.h"
 
 using std::vector;
 using std::string;
-using std::ifstream;
 
 class WaveReader
 {
     public:
-        WaveReader(string filename);
+        WaveReader(string filename, bool &forceStop);
         virtual ~WaveReader();
 
         AudioFormat* getFormat();
-        vector<float>* getFrames(unsigned frameCount, unsigned frameOffset);
-        bool isEnd(unsigned frameOffset);
+        vector<float>* getFrames(unsigned frameCount, bool &forceStop);
+        bool setFrameOffset(unsigned frameOffset);
     private:
         string filename;
         PCMWaveHeader header;
-        unsigned fileSize, dataOffset;
-        ifstream ifs;
+        unsigned dataOffset, currentOffset;
+        int fileDescriptor;
 
-        vector<char>* readData(unsigned bytesToRead, bool closeFileOnException);
+        vector<char>* readData(unsigned bytesToRead, bool headerBytes, bool &forceStop);
+        string getFilename();
 };
 
 #endif // WAVE_READER_H

@@ -52,17 +52,16 @@ class Transmitter
         void play(string filename, double frequency, bool loop);
         void stop();
 
-	static Transmitter* getInstance(); 
-        static AudioFormat* getFormat(string filename);
+        static Transmitter* getInstance();
     private:
         Transmitter();
 
-        bool doStop;
+        bool forceStop, eof;
 
         static void* peripherals;
         static vector<float>* buffer;
+        static bool transmitting, restart;
         static unsigned frameOffset, clockDivisor;
-        static bool isTransmitting;
         static void* transmit(void* params);
 };
 

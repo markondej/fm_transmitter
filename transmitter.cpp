@@ -33,11 +33,12 @@
 
 #include "transmitter.h"
 #include "wave_reader.h"
-#include "stdin_reader.h"
 #include <sstream>
 #include <cmath>
 #include <string.h>
+#include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 
 using std::ostringstream;
@@ -47,12 +48,11 @@ using std::ostringstream;
 #define CLK0DIV_BASE 0x00101074
 #define TCNT_BASE 0x00003004
 
-#define STDIN_READ_DELAY 700000
-
 #define ACCESS(base, offset) *(volatile unsigned*)((int)base + offset)
 #define ACCESS64(base, offset) *(volatile unsigned long long*)((int)base + offset)
 
-bool Transmitter::isTransmitting = false;
+bool Transmitter::transmitting = false;
+bool Transmitter::restart = false;
 unsigned Transmitter::clockDivisor = 0;
 unsigned Transmitter::frameOffset = 0;
 vector<float>* Transmitter::buffer = NULL;
@@ -104,98 +104,100 @@ Transmitter* Transmitter::getInstance()
 
 void Transmitter::play(string filename, double frequency, bool loop)
 {
-    if (isTransmitting) {
+    if (transmitting) {
         throw ErrorReporter("Cannot play, transmitter already in use");
     }
 
-    WaveReader* file = NULL;
-    StdinReader* stdin = NULL;
-    AudioFormat* format;
+    transmitting = true;
+    forceStop = false;
 
-    bool readStdin = filename == "-";
-
-    if (!readStdin) {
-        file = new WaveReader(filename);
-        format = file->getFormat();
-    } else {
-        stdin = StdinReader::getInstance();
-        format = stdin->getFormat();
-        usleep(STDIN_READ_DELAY);
-    }
+    WaveReader* reader = new WaveReader(filename != "-" ? filename : string(), forceStop);
+    AudioFormat* format = reader->getFormat();
 
     clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
-
-    isTransmitting = true;
-    doStop = false;
-
     unsigned bufferFrames = (unsigned)((unsigned long long)format->sampleRate * BUFFER_TIME / 1000000);
 
-    buffer = (!readStdin) ? file->getFrames(bufferFrames, 0) : stdin->getFrames(bufferFrames, doStop);
+    frameOffset = 0;
+    restart = false;
 
-    pthread_t thread;
-    void* params = (void*)&format->sampleRate;
-
-    int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, params);
-    if (returnCode) {
-        if (!readStdin) {
-            delete file;
+    try {
+        vector<float>* frames = reader->getFrames(bufferFrames, forceStop);
+        if (frames == NULL) {
+            delete format;
+            delete reader;
+            return;
         }
-        delete format;
-        ostringstream oss;
-        oss << "Cannot create new thread (code: " << returnCode << ")";
-        throw ErrorReporter(oss.str());
-    }
+        eof = frames->size() < bufferFrames;
+        buffer = frames;
 
-    usleep(BUFFER_TIME / 2);
+        pthread_t thread;
+        void* params = (void*)&format->sampleRate;
 
-    bool doPlay = true;
-    while (doPlay && !doStop) {
-        while ((readStdin || !file->isEnd(frameOffset + bufferFrames)) && !doStop) {
-            if (buffer == NULL) {
-                buffer = (!readStdin) ? file->getFrames(bufferFrames, frameOffset + bufferFrames) : stdin->getFrames(bufferFrames, doStop);
-            }
-            usleep(BUFFER_TIME / 2);
+        int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, params);
+        if (returnCode) {
+            delete reader;
+            delete format;
+            delete frames;
+            ostringstream oss;
+            oss << "Cannot create new thread (code: " << returnCode << ")";
+            throw ErrorReporter(oss.str());
         }
-        if (loop && !readStdin && !doStop) {
-            isTransmitting = false;
 
-            buffer = file->getFrames(bufferFrames, 0);
+        usleep(BUFFER_TIME / 2);
 
-            pthread_join(thread, NULL);
-
-            isTransmitting = true;
-
-            returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, params);
-            if (returnCode) {
-                if (!readStdin) {
-                    delete file;
+        while (!forceStop) {
+            while (!eof && !forceStop) {
+                if (buffer == NULL) {
+                    if (!reader->setFrameOffset(frameOffset + bufferFrames)) {
+                        break;
+                    }
+                    frames = reader->getFrames(bufferFrames, forceStop);
+                    if (frames == NULL) {
+                        forceStop = true;
+                        break;
+                    }
+                    eof = frames->size() < bufferFrames;
+                    buffer = frames;
                 }
-                delete format;
-                ostringstream oss;
-                oss << "Cannot create new thread (code: " << returnCode << ")";
-                throw ErrorReporter(oss.str());
+                usleep(BUFFER_TIME / 2);
             }
-        } else {
-            doPlay = false;
+            if (loop && !forceStop) {
+                frameOffset = 0;
+                restart = true;
+                if (reader->setFrameOffset(0)) {
+                    break;
+                }
+                frames = reader->getFrames(bufferFrames, forceStop);
+                if (frames == NULL) {
+                    break;
+                }
+                eof = frames->size() < bufferFrames;
+                buffer = frames;
+                usleep(BUFFER_TIME / 2);
+            } else {
+                forceStop = true;
+            }
         }
-    }
-    isTransmitting = false;
+        transmitting = false;
 
-    pthread_join(thread, NULL);
-
-    if (!readStdin) {
-        delete file;
+        pthread_join(thread, NULL);
+   } catch (ErrorReporter &error) {
+        delete reader;
+        delete format;
+        throw error;
     }
+
+    delete reader;
     delete format;
-}
+ }
 
 void* Transmitter::transmit(void* params)
 {
     unsigned long long current, start, playbackStart;
     unsigned offset, length, temp;
     vector<float>* frames = NULL;
-    float value = 0.0;
     float* data;
+    float value;
 #ifndef NO_PREEMP
     float prevValue = 0.0;
 #endif
@@ -209,18 +211,22 @@ void* Transmitter::transmit(void* params)
     ACCESS(peripherals, GPIO_BASE) = (ACCESS(peripherals, GPIO_BASE) & 0xFFFF8FFF) | (0x01 << 14);
     ACCESS(peripherals, CLK0_BASE) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
 
-    frameOffset = 0;
     playbackStart = ACCESS64(peripherals, TCNT_BASE);
     current = playbackStart;
-    start = playbackStart;
 
-    while (isTransmitting) {
-        while ((buffer == NULL) && isTransmitting) {
+    while (transmitting) {
+        start = current;
+        while ((buffer == NULL) && transmitting) {
             usleep(1);
             current = ACCESS64(peripherals, TCNT_BASE);
         }
-        if (!isTransmitting) {
+        if (!transmitting) {
             break;
+        }
+        if (restart) {
+            playbackStart = current;
+            start = current;
+            restart = false;
         }
         frames = buffer;
         frameOffset = (current - playbackStart) * (sampleRate) / 1000000;
@@ -256,7 +262,6 @@ void* Transmitter::transmit(void* params)
 #endif
         }
 
-        start = ACCESS64(peripherals, TCNT_BASE);
         delete frames;
     }
 
@@ -265,25 +270,7 @@ void* Transmitter::transmit(void* params)
     return NULL;
 }
 
-AudioFormat* Transmitter::getFormat(string filename)
-{
-    WaveReader* file;
-    StdinReader* stdin;
-    AudioFormat* format;
-
-   if (filename != "-") {
-        file = new WaveReader(filename);
-        format = file->getFormat();
-        delete file;
-    } else {
-        stdin = StdinReader::getInstance();
-        format = stdin->getFormat();
-    }
-	
-    return format;
-}
-
 void Transmitter::stop()
 {
-    doStop = true;
+    forceStop = true;
 }

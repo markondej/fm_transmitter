@@ -32,19 +32,30 @@
 */
 
 #include <iostream>
+#include "wave_reader.h"
 #include "transmitter.h"
 #include <cstdlib>
 #include <csignal>
 
 using namespace std;
 
+bool stop = false;
 Transmitter* transmitter = NULL;
+
+AudioFormat* getFormat(string filename) {
+    stop = false;
+    WaveReader* reader = new WaveReader(filename, stop);
+    AudioFormat* format = reader->getFormat();
+    delete reader;
+    return format;
+}
 
 void sigIntHandler(int sigNum)
 {
     if (transmitter != NULL) {
         cout << "Stopping..." << endl;
         transmitter->stop();
+        stop = true;
     }
 }
 
@@ -80,12 +91,16 @@ int main(int argc, char** argv)
     try {
         transmitter = Transmitter::getInstance();
 
-        AudioFormat* format = Transmitter::getFormat(filename);
-        cout << "Playing: " << ((filename != "-") ? filename : "stdin") << ", "
-             << format->sampleRate << " Hz, "
-             << format->bitsPerSample << " bits, "
-             << ((format->channels > 0x01) ? "stereo" : "mono") << endl;
-        delete format;
+        if (filename != "-") {
+            AudioFormat* format = getFormat(filename);
+            cout << "Playing: " << filename << ", "
+                 << format->sampleRate << " Hz, "
+                 << format->bitsPerSample << " bits, "
+                 << ((format->channels > 0x01) ? "stereo" : "mono") << endl;
+            delete format;
+        } else {
+            cout << "Playing: STDIN" << endl;
+        }
 
         transmitter->play(filename, frequency, loop);
     } catch (exception &error) {
