@@ -42,7 +42,7 @@ sudo apt-get install libmp3lame-dev
 cd /usr/src
 sudo git clone git://git.videolan.org/x264
 cd x264
-sudo ./configure --host=arm-unknown-linux-gnueabi --enable-static --disable-opencl
+sudo ./configure --host=arm-unknown-linux-gnueabi --enable-static --disable-opencl --enable-shared
 sudo make
 sudo make install
 ```
