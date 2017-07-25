@@ -56,6 +56,7 @@ cd ffmpeg
 sudo ./configure --arch=armv7-a --target-os=linux --enable-gpl --enable-libx264 --enable-nonfree --enable-libmp3lame --extra-cflags='-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard'
 sudo make -j4
 sudo make install
+sudo ldconfig
 ```
 **Note--** use <code>sudo ./configure --arch=armel --target-os=linux --enable-gpl --enable-libx264 --enable-nonfree</code> for devices prior to ***RaspberryPi 2 model B+***.
 
