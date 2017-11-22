@@ -164,7 +164,7 @@ void Transmitter::play(string filename, double frequency, bool loop)
             if (loop && !forceStop) {
                 frameOffset = 0;
                 restart = true;
-                if (reader->setFrameOffset(0)) {
+                if (!reader->setFrameOffset(0)) {
                     break;
                 }
                 frames = reader->getFrames(bufferFrames, forceStop);
