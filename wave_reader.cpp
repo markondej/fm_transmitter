@@ -1,7 +1,7 @@
-/*
+#n/*
     fm_transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2015, Marcin Kondej
+    Copyright (c) 2018, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -43,11 +43,9 @@ using std::ostringstream;
 using std::exception;
 
 WaveReader::WaveReader(string filename, bool &forceStop) :
-    filename(filename), currentOffset(0)
+    filename(filename), currentFrameOffset(0), headerOffset(0)
 {
     char* headerData = (char*)((void*)&header);
-    vector<char>* data;
-    unsigned bytesToRead, headerOffset;
     ostringstream oss;
 
     if (!filename.empty()) {
@@ -63,29 +61,14 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
     }
 
     try {
-        bytesToRead = sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) +
-            sizeof(PCMWaveHeader::format);
-        data = readData(bytesToRead, true, forceStop);
-        if (data == NULL) {
-            throw ErrorReporter("Cannot obtain header, program interrupted");
-        }
-        memcpy(headerData, &(*data)[0], bytesToRead);
-        headerOffset = bytesToRead;
-        delete data;
+        readData(sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) + sizeof(PCMWaveHeader::format), true, forceStop, headerData);
 
         if ((string(header.chunkID, 4) != string("RIFF")) || (string(header.format, 4) != string("WAVE"))) {
             oss << "Error while opening " << getFilename() << ", WAVE file expected";
             throw ErrorReporter(oss.str());
         }
 
-        bytesToRead = sizeof(PCMWaveHeader::subchunk1ID) + sizeof(PCMWaveHeader::subchunk1Size);
-        data = readData(bytesToRead, true, forceStop);
-        if (data == NULL) {
-            throw ErrorReporter("Cannot obtain header, program interrupted");
-        }
-        memcpy(&headerData[headerOffset], &(*data)[0], bytesToRead);
-        headerOffset += bytesToRead;
-        delete data;
+        readData(sizeof(PCMWaveHeader::subchunk1ID) + sizeof(PCMWaveHeader::subchunk1Size), true, forceStop, headerData);
 
         unsigned subchunk1MinSize = sizeof(PCMWaveHeader::audioFormat) + sizeof(PCMWaveHeader::channels) +
             sizeof(PCMWaveHeader::sampleRate) + sizeof(PCMWaveHeader::byteRate) + sizeof(PCMWaveHeader::blockAlign) +
@@ -95,13 +78,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
             throw ErrorReporter(oss.str());
         }
 
-        data = readData(header.subchunk1Size, true, forceStop);
-        if (data == NULL) {
-            throw ErrorReporter("Cannot obtain header, program interrupted");
-        }
-        memcpy(&headerData[headerOffset], &(*data)[0], subchunk1MinSize);
-        headerOffset += subchunk1MinSize;
-        delete data;
+        readData(header.subchunk1Size, true, forceStop, headerData, headerOffset);
 
         if ((header.audioFormat != WAVE_FORMAT_PCM) ||
             (header.byteRate != (header.bitsPerSample >> 3) * header.channels * header.sampleRate) ||
@@ -111,14 +88,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
             throw ErrorReporter(oss.str());
         }
 
-        bytesToRead = sizeof(PCMWaveHeader::subchunk2ID) + sizeof(PCMWaveHeader::subchunk2Size);
-        data = readData(bytesToRead, true, forceStop);
-        if (data == NULL) {
-            throw ErrorReporter("Cannot obtain header, program interrupted");
-        }
-        memcpy(&headerData[headerOffset], &(*data)[0], bytesToRead);
-        headerOffset += bytesToRead;
-        delete data;
+        readData(sizeof(PCMWaveHeader::subchunk2ID) + sizeof(PCMWaveHeader::subchunk2Size), true, forceStop, headerData);
 
         if (string(header.subchunk2ID, 4) != string("data")) {
             oss << "Error while opening " << getFilename() << ", data corrupted";
@@ -143,7 +113,7 @@ WaveReader::~WaveReader()
     }
 }
 
-vector<char>* WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool &forceStop)
+vector<char>* WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool &forceStop, char* headerData)
 {
     unsigned bytesRead = 0;
     vector<char>* data = new vector<char>();
@@ -175,13 +145,21 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool 
         }
     }
 
-    if (!headerBytes) {
-        currentOffset += bytesRead;
-    }
-
     if (forceStop) {
         delete data;
         data = NULL;
+    }
+
+    if (headerBytes) {
+        if (data == NULL) {
+            throw ErrorReporter("Cannot obtain header, program interrupted");
+        }
+        memcpy(&headerData[headerOffset], &(*data)[0], bytesRead);
+        headerOffset += bytesRead;
+        delete data;
+        data = NULL;
+    } else {
+        currentFrameOffset += bytesRead;
     }
 
     return data;
@@ -194,14 +172,14 @@ vector<float>* WaveReader::getFrames(unsigned frameCount, bool &forceStop) {
 
     bytesPerFrame = (header.bitsPerSample >> 3) * header.channels;
     bytesToRead = frameCount * bytesPerFrame;
-    bytesLeft = header.subchunk2Size - currentOffset;
+    bytesLeft = header.subchunk2Size - currentFrameOffse;
     if (bytesToRead > bytesLeft) {
         bytesToRead = bytesLeft - bytesLeft % bytesPerFrame;
         frameCount = bytesToRead / bytesPerFrame;
     }
 
     try {
-        data = readData(bytesToRead, false, forceStop);
+        data = readData(bytesToRead, false, forceStop, NULL);
     } catch (ErrorReporter &error) {
         delete frames;
         throw error;
@@ -237,8 +215,8 @@ vector<float>* WaveReader::getFrames(unsigned frameCount, bool &forceStop) {
 
 bool WaveReader::setFrameOffset(unsigned frameOffset) {
     if (fileDescriptor != STDIN_FILENO) {
-        currentOffset = frameOffset * (header.bitsPerSample >> 3) * header.channels;
-        if (lseek(fileDescriptor, dataOffset + currentOffset, SEEK_SET) == -1) {
+        currentFrameOffset = frameOffset * (header.bitsPerSample >> 3) * header.channels;
+        if (lseek(fileDescriptor, dataOffset + currentFrameOffse, SEEK_SET) == -1) {
             return false;
         }
     }

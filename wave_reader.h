@@ -1,7 +1,7 @@
 /*
     fm_transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2015, Marcin Kondej
+    Copyright (c) 2018, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -54,10 +54,10 @@ class WaveReader
     private:
         string filename;
         PCMWaveHeader header;
-        unsigned dataOffset, currentOffset;
+        unsigned dataOffset, headerOffset, currentFrameOffset;
         int fileDescriptor;
 
-        vector<char>* readData(unsigned bytesToRead, bool headerBytes, bool &forceStop);
+        vector<char>* readData(unsigned bytesToRead, bool headerBytes, bool &forceStop, char* headerData);
         string getFilename();
 };
 
