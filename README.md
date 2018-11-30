@@ -16,6 +16,10 @@ Then you can use it by typing:
 ```
 sudo ./fm_transmitter [-f frequency] [-r] filename
 ```
+where:
+* -f frequency - Specifies the frequency in MHz, default is 100.0
+* -r - Loops the file
+* filename - WAVE file name
 
 ### WAVE Files
 You can open uncompressed WAVE (.wav) files or read audio data from stdin, eg.:
@@ -29,9 +33,6 @@ To use a USB sound card microphone input use arecord, eg.:
 arecord -D hw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
 ```
 In case of performance dropdown use ```plughw:1,0``` instead of ```hw:1,0```.
-```
-arecord -D plughw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
-```
 
 ## Legal note
 Please keep in mind that transmitting on certain frequencies without special permissions may be illegal in your country.
