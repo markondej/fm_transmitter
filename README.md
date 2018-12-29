@@ -4,7 +4,7 @@ Use Raspberry Pi as FM transmitter. Works on any Raspberry Pi board.
 This project uses the general clock output to produce frequency modulated radio communication. It is based on idea originaly posted here: [http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter](http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter), but does not use DMA controller in order to distribute samples to output (clock generator), so sound quality is worse as in PiFm project and only mono transmition is available but this makes possible to run it on all kind of boards.
 
 ## How to use it
-To use this project You will have to buid it. First, clone this repository, then use "make" command as shown below:
+To use this project You will have to build it. First, clone this repository, then use "make" command as shown below:
 ```
 git clone https://github.com/markondej/fm_transmitter
 cd fm_transmitter
@@ -23,7 +23,7 @@ You can transmitt uncompressed WAVE (.wav) files directly or read audio data fro
 ```
 sox star_wars.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
 ```
-Notice only uncompressed WAVE files are supported. If You expire "corrupted data" error try converting file, eg. by using SoX:
+Please note only uncompressed WAVE files are supported. If You expire "corrupted data" error try converting file, eg. by using SoX:
 ```
 sox my-audio.mp3 -r 22050 -c 1 -b 16 -t wav my-converted-audio.wav
 sudo ./fm_transmitter -f 100.6 my-converted-audio.wav
