@@ -32,16 +32,15 @@
 */
 
 #include "transmitter.h"
-#include "wave_reader.h"
+#include "error_reporter.h"
+#include <bcm_host.h>
 #include <sstream>
 #include <cmath>
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 
 using std::ostringstream;
+using std::vector;
 
 #define GPIO_BASE 0x00200000
 #define CLK0_BASE 0x00101070
@@ -51,40 +50,14 @@ using std::ostringstream;
 #define ACCESS(base, offset) *(volatile unsigned*)((int)base + offset)
 #define ACCESS64(base, offset) *(volatile unsigned long long*)((int)base + offset)
 
-bool Transmitter::transmitting = false;
-bool Transmitter::restart = false;
-unsigned Transmitter::clockDivisor = 0;
-unsigned Transmitter::frameOffset = 0;
-vector<float>* Transmitter::buffer = NULL;
-void* Transmitter::peripherals = NULL;
-
 Transmitter::Transmitter()
 {
-    bool isBcm2835 = true;
-
-    FILE* pipe = popen("uname -m", "r");
-    if (pipe) {
-        char buffer[64];
-        string machine = "";
-        while (!feof(pipe)) {
-            if (fgets(buffer, 64, pipe)) {
-                machine += buffer;
-            }
-        }
-        pclose(pipe);
-
-        machine = machine.substr(0, machine.length() - 1);
-        if (machine != "armv6l") {
-            isBcm2835 = false;
-        }
-    }
-
     int memFd;
     if ((memFd = open("/dev/mem", O_RDWR | O_SYNC)) < 0) {
         throw ErrorReporter("Cannot open /dev/mem (permission denied)");
     }
 
-    peripherals = mmap(NULL, 0x002FFFFF, PROT_READ | PROT_WRITE, MAP_SHARED, memFd, isBcm2835 ? 0x20000000 : 0x3F000000);
+    peripherals = mmap(NULL, bcm_host_get_peripheral_size(), PROT_READ | PROT_WRITE, MAP_SHARED, memFd, bcm_host_get_peripheral_address());
     close(memFd);
     if (peripherals == MAP_FAILED) {
         throw ErrorReporter("Cannot obtain access to peripherals (mmap error)");
@@ -93,7 +66,7 @@ Transmitter::Transmitter()
 
 Transmitter::~Transmitter()
 {
-    munmap(peripherals, 0x002FFFFF);
+    munmap(peripherals, bcm_host_get_peripheral_size());
 }
 
 Transmitter* Transmitter::getInstance()
@@ -102,7 +75,7 @@ Transmitter* Transmitter::getInstance()
     return &instance;
 }
 
-void Transmitter::play(string filename, double frequency, bool loop)
+void Transmitter::play(WaveReader* reader, double frequency, unsigned char dmaChannel, bool loop)
 {
     if (transmitting) {
         throw ErrorReporter("Cannot play, transmitter already in use");
@@ -111,40 +84,45 @@ void Transmitter::play(string filename, double frequency, bool loop)
     transmitting = true;
     forceStop = false;
 
-    WaveReader* reader = new WaveReader(filename != "-" ? filename : string(), forceStop);
-    AudioFormat* format = reader->getFormat();
+    PCMWaveHeader header = reader->getHeader();
+    unsigned bufferFrames = (unsigned)((unsigned long long)header.sampleRate * BUFFER_TIME / 1000000);
+    vector<float>* frames = reader->getFrames(bufferFrames, forceStop);
+    if (frames == NULL) {
+        return;
+    }
+    bool eof = frames->size() < bufferFrames;
+    vector<float>* buffer = frames;
 
-    clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
-    unsigned bufferFrames = (unsigned)((unsigned long long)format->sampleRate * BUFFER_TIME / 1000000);
+    unsigned frameOffset = 0;
+    unsigned clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
+    bool restart = false;
 
-    frameOffset = 0;
-    restart = false;
+    void* params[8] = {
+        peripherals,
+        (void*)(unsigned*)&buffer,
+        (void*)(unsigned*)&frameOffset,
+        (void*)(unsigned*)&clockDivisor,
+        (void*)(unsigned*)&transmitting,
+        (void*)(unsigned*)&restart,
+        (void*)(unsigned*)&dmaChannel,
+        (void*)(unsigned*)&header.sampleRate
+    };
+
+    pthread_t thread;
+    int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, (void*)&params);
+    if (returnCode) {
+        delete frames;
+        ostringstream oss;
+        oss << "Cannot create new thread (code: " << returnCode << ")";
+        throw ErrorReporter(oss.str());
+    }
+
+    usleep(BUFFER_TIME / 2);
+
+    bool isError = false;
+    string errorMessage;
 
     try {
-        vector<float>* frames = reader->getFrames(bufferFrames, forceStop);
-        if (frames == NULL) {
-            delete format;
-            delete reader;
-            return;
-        }
-        eof = frames->size() < bufferFrames;
-        buffer = frames;
-
-        pthread_t thread;
-        void* params = (void*)&format->sampleRate;
-
-        int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, params);
-        if (returnCode) {
-            delete reader;
-            delete format;
-            delete frames;
-            ostringstream oss;
-            oss << "Cannot create new thread (code: " << returnCode << ")";
-            throw ErrorReporter(oss.str());
-        }
-
-        usleep(BUFFER_TIME / 2);
-
         while (!forceStop) {
             while (!eof && !forceStop) {
                 if (buffer == NULL) {
@@ -178,72 +156,73 @@ void Transmitter::play(string filename, double frequency, bool loop)
                 forceStop = true;
             }
         }
-        transmitting = false;
-
-        pthread_join(thread, NULL);
-   } catch (ErrorReporter &error) {
-        delete reader;
-        delete format;
-        throw error;
+    } catch (ErrorReporter &error) {
+        errorMessage = error.what();
+        isError = true;
     }
-
-    delete reader;
-    delete format;
- }
+    transmitting = false;
+    pthread_join(thread, NULL);
+    if (isError) {
+        throw ErrorReporter(errorMessage);
+    }
+}
 
 void* Transmitter::transmit(void* params)
 {
+    void* peripherals = ((void**)params)[0];
+    vector<float>** buffer = (vector<float>**)((void**)params)[1];
+    unsigned* frameOffset = (unsigned*)((void**)params)[2], clockDivisor = (unsigned*)((void**)params)[3];
+    bool* transmitting = (bool*)((void**)params)[4], restart = (bool*)((void**)params)[5];
+    unsigned char dmaChannel = *(unsigned char*)((void**)params)[6];
+    unsigned sampleRate = *(unsigned*)((void**)params)[7];
+
     unsigned long long current, start, playbackStart;
-    unsigned offset, length, temp;
+    unsigned offset, length, prevOffset;
     vector<float>* frames = NULL;
     float* data;
     float value;
+
 #ifndef NO_PREEMP
     float prevValue = 0.0;
-#endif
-
-    unsigned sampleRate = *(unsigned*)(params);
-
-#ifndef NO_PREEMP
     float preemp = 0.75 - 250000.0 / (float)(sampleRate * 75);
 #endif
 
     ACCESS(peripherals, GPIO_BASE) = (ACCESS(peripherals, GPIO_BASE) & 0xFFFF8FFF) | (0x01 << 14);
     ACCESS(peripherals, CLK0_BASE) = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
 
-    playbackStart = ACCESS64(peripherals, TCNT_BASE);
-    current = playbackStart;
+    current = ACCESS64(peripherals, TCNT_BASE);
+    playbackStart = current;
 
-    while (transmitting) {
+    while (*transmitting) {
         start = current;
-        while ((buffer == NULL) && transmitting) {
+
+        while ((*buffer == NULL) && *transmitting) {
             usleep(1);
             current = ACCESS64(peripherals, TCNT_BASE);
         }
-        if (!transmitting) {
+        if (!*transmitting) {
             break;
         }
-        if (restart) {
+        if (*restart) {
             playbackStart = current;
             start = current;
-            restart = false;
+            *restart = false;
         }
-        frames = buffer;
-        frameOffset = (current - playbackStart) * (sampleRate) / 1000000;
-        buffer = NULL;
+        frames = *buffer;
+        *frameOffset = (current - playbackStart) * (sampleRate) / 1000000;
+        *buffer = NULL;
+
+        offset = (current - start) * (sampleRate) / 1000000;
 
         length = frames->size();
         data = &(*frames)[0];
 
-        offset = 0;
-
         while (true) {
-            temp = offset;
             if (offset >= length) {
-                offset -= length;
                 break;
             }
 
+            prevOffset = offset;
             value = data[offset];
 
 #ifndef NO_PREEMP
@@ -251,8 +230,8 @@ void* Transmitter::transmit(void* params)
             value = (value < -1.0) ? -1.0 : ((value > 1.0) ? 1.0 : value);
 #endif
 
-            ACCESS(peripherals, CLK0DIV_BASE) = (0x5A << 24) | ((clockDivisor) - (int)(round(value * 16.0)));
-            while (temp >= offset) {
+            ACCESS(peripherals, CLK0DIV_BASE) = (0x5A << 24) | ((*clockDivisor) - (int)(round(value * 16.0)));
+            while (offset == prevOffset) {
                 asm("nop");
                 current = ACCESS64(peripherals, TCNT_BASE);
                 offset = (current - start) * (sampleRate) / 1000000;

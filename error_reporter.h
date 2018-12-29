@@ -44,9 +44,9 @@ class ErrorReporter : public exception
 {
     public:
         explicit ErrorReporter(string message);
-        virtual ~ErrorReporter() throw();        
+        virtual ~ErrorReporter() throw();
 
-	virtual const char* what() const throw();
+        virtual const char* what() const throw();
     protected:
         string errorMessage;
 };

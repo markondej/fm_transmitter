@@ -34,11 +34,7 @@
 #ifndef TRANSMITTER_H
 #define TRANSMITTER_H
 
-#include "error_reporter.h"
-#include "audio_format.h"
-#include <vector>
-
-using std::vector;
+#include "wave_reader.h"
 
 #define BUFFER_TIME 1000000
 
@@ -48,21 +44,15 @@ class Transmitter
 {
     public:
         virtual ~Transmitter();
-
-        void play(string filename, double frequency, bool loop);
-        void stop();
-
         static Transmitter* getInstance();
+        void play(WaveReader* reader, double frequency, unsigned char dmaChannel, bool loop);
+        void stop();
     private:
         Transmitter();
-
-        bool forceStop, eof;
-
-        static void* peripherals;
-        static vector<float>* buffer;
-        static bool transmitting, restart;
-        static unsigned frameOffset, clockDivisor;
         static void* transmit(void* params);
+
+        void* peripherals;
+        bool forceStop, transmitting;
 };
 
 #endif // TRANSMITTER_H

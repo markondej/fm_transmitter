@@ -31,24 +31,16 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <iostream>
-#include "wave_reader.h"
 #include "transmitter.h"
 #include <cstdlib>
 #include <csignal>
+#include <iostream>
+#include <unistd.h>
 
 using namespace std;
 
 bool stop = false;
 Transmitter* transmitter = NULL;
-
-AudioFormat* getFormat(string filename) {
-    stop = false;
-    WaveReader* reader = new WaveReader(filename, stop);
-    AudioFormat* format = reader->getFormat();
-    delete reader;
-    return format;
-}
 
 void sigIntHandler(int sigNum)
 {
@@ -64,22 +56,22 @@ int main(int argc, char** argv)
     double frequency = 100.0;
     bool loop = false;
     string filename;
-
     bool showUsage = true;
-    for (int i = 1; i < argc; i++) {
-        if (string("-f") == argv[i]) {
-            if (i < argc - 1) {
-                frequency = ::atof(argv[i + 1]);
-                i++;
-            }
-        } else if (string("-r") == argv[i]) {
-            loop = true;
-        } else {
-            if (i == argc - 1) {
-                showUsage = false;
-                filename = argv[i];
-            }
+    int opt;
+
+    while ((opt = getopt(argc, argv, "rf:")) != -1) {
+        switch (opt) {
+            case 'r':
+                loop = true;
+                break;
+            case 'f':
+                frequency = ::atof(optarg);
+                break;
         }
+    }
+    if (optind < argc) {
+        filename = argv[optind];
+        showUsage = false;
     }
     if (showUsage) {
         cout << "Usage: " << argv[0] << " [-f frequency] [-r] FILE" << endl;
@@ -90,19 +82,13 @@ int main(int argc, char** argv)
 
     try {
         transmitter = Transmitter::getInstance();
-
-        if (filename != "-") {
-            AudioFormat* format = getFormat(filename);
-            cout << "Playing: " << filename << ", "
-                 << format->sampleRate << " Hz, "
-                 << format->bitsPerSample << " bits, "
-                 << ((format->channels > 0x01) ? "stereo" : "mono") << endl;
-            delete format;
-        } else {
-            cout << "Playing: STDIN" << endl;
-        }
-
-        transmitter->play(filename, frequency, loop);
+        WaveReader reader(filename != "-" ? filename : string(), stop);
+        PCMWaveHeader header = reader.getHeader();
+        cout << "Playing: " << reader.getFilename() << ", "
+            << header.sampleRate << " Hz, "
+            << header.bitsPerSample << " bits, "
+            << ((header.channels > 0x01) ? "stereo" : "mono") << endl;
+        transmitter->play(&reader, frequency, 0, loop);
     } catch (exception &error) {
         cout << "Error: " << error.what() << endl;
         return 1;

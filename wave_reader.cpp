@@ -1,4 +1,4 @@
-#n/*
+/*
     fm_transmitter - use Raspberry Pi as FM transmitter
 
     Copyright (c) 2018, Marcin Kondej
@@ -34,16 +34,15 @@
 #include "wave_reader.h"
 #include "error_reporter.h"
 #include <sstream>
-#include <string.h>
+#include <cstring>
 #include <unistd.h>
 #include <fcntl.h>
-#include <errno.h>
 
 using std::ostringstream;
 using std::exception;
 
 WaveReader::WaveReader(string filename, bool &forceStop) :
-    filename(filename), currentFrameOffset(0), headerOffset(0)
+    filename(filename), headerOffset(0), currentFrameOffset(0)
 {
     char* headerData = (char*)((void*)&header);
     ostringstream oss;
@@ -78,7 +77,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
             throw ErrorReporter(oss.str());
         }
 
-        readData(header.subchunk1Size, true, forceStop, headerData, headerOffset);
+        readData(header.subchunk1Size, true, forceStop, headerData);
 
         if ((header.audioFormat != WAVE_FORMAT_PCM) ||
             (header.byteRate != (header.bitsPerSample >> 3) * header.channels * header.sampleRate) ||
@@ -172,7 +171,7 @@ vector<float>* WaveReader::getFrames(unsigned frameCount, bool &forceStop) {
 
     bytesPerFrame = (header.bitsPerSample >> 3) * header.channels;
     bytesToRead = frameCount * bytesPerFrame;
-    bytesLeft = header.subchunk2Size - currentFrameOffse;
+    bytesLeft = header.subchunk2Size - currentFrameOffset;
     if (bytesToRead > bytesLeft) {
         bytesToRead = bytesLeft - bytesLeft % bytesPerFrame;
         frameCount = bytesToRead / bytesPerFrame;
@@ -216,7 +215,7 @@ vector<float>* WaveReader::getFrames(unsigned frameCount, bool &forceStop) {
 bool WaveReader::setFrameOffset(unsigned frameOffset) {
     if (fileDescriptor != STDIN_FILENO) {
         currentFrameOffset = frameOffset * (header.bitsPerSample >> 3) * header.channels;
-        if (lseek(fileDescriptor, dataOffset + currentFrameOffse, SEEK_SET) == -1) {
+        if (lseek(fileDescriptor, dataOffset + currentFrameOffset, SEEK_SET) == -1) {
             return false;
         }
     }
@@ -228,11 +227,7 @@ string WaveReader::getFilename()
     return fileDescriptor != STDIN_FILENO ? filename : "STDIN";
 }
 
-AudioFormat* WaveReader::getFormat()
+PCMWaveHeader WaveReader::getHeader()
 {
-    AudioFormat* format = new AudioFormat;
-    format->channels = header.channels;
-    format->sampleRate = header.sampleRate;
-    format->bitsPerSample = header.bitsPerSample;
-    return format;
+    return header;
 }
