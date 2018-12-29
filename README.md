@@ -18,7 +18,7 @@ Where:
 * -f 102.0 - Specifies the frequency in MHz, if not passed default is 100.0
 * acoustic_guitar_duet.wav - Sample WAVE file, You can use your own
 
-### Supported audio files
+### Supported audio formats
 You can transmitt uncompressed WAVE (.wav) files directly or read audio data from stdin, eg.:
 ```
 sox star_wars.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
