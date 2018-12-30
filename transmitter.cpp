@@ -50,7 +50,10 @@ using std::vector;
 #define ACCESS(base, offset) *(volatile unsigned*)((int)base + offset)
 #define ACCESS64(base, offset) *(volatile unsigned long long*)((int)base + offset)
 
-Transmitter::Transmitter()
+bool Transmitter::transmitting = false;
+void* Transmitter::peripherals = NULL;
+
+Transmitter::Transmitter() : forceStop(false)
 {
     int memFd;
     if ((memFd = open("/dev/mem", O_RDWR | O_SYNC)) < 0) {
@@ -97,19 +100,17 @@ void Transmitter::play(WaveReader* reader, double frequency, unsigned char dmaCh
     unsigned clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
     bool restart = false;
 
-    void* params[8] = {
-        peripherals,
-        (void*)(unsigned*)&buffer,
-        (void*)(unsigned*)&frameOffset,
-        (void*)(unsigned*)&clockDivisor,
-        (void*)(unsigned*)&transmitting,
-        (void*)(unsigned*)&restart,
-        (void*)(unsigned*)&dmaChannel,
-        (void*)(unsigned*)&header.sampleRate
+    void* transmitterParams[6] = {
+        (void*)&restart,
+        (void*)&buffer,
+        (void*)&frameOffset,
+        (void*)&clockDivisor,
+        (void*)&header.sampleRate,
+        (void*)&dmaChannel
     };
 
     pthread_t thread;
-    int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, (void*)&params);
+    int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, (void*)transmitterParams);
     if (returnCode) {
         delete frames;
         ostringstream oss;
@@ -169,12 +170,11 @@ void Transmitter::play(WaveReader* reader, double frequency, unsigned char dmaCh
 
 void* Transmitter::transmit(void* params)
 {
-    void* peripherals = ((void**)params)[0];
+    bool* restart = (bool*)((void**)params)[0];
     vector<float>** buffer = (vector<float>**)((void**)params)[1];
-    unsigned* frameOffset = (unsigned*)((void**)params)[2], clockDivisor = (unsigned*)((void**)params)[3];
-    bool* transmitting = (bool*)((void**)params)[4], restart = (bool*)((void**)params)[5];
-    unsigned char dmaChannel = *(unsigned char*)((void**)params)[6];
-    unsigned sampleRate = *(unsigned*)((void**)params)[7];
+    unsigned* frameOffset = (unsigned*)((void**)params)[2];
+    unsigned clockDivisor = *(unsigned*)((void**)params)[3], sampleRate = *(unsigned*)((void**)params)[4];
+    unsigned char dmaChannel = *(unsigned char*)((void**)params)[5];
 
     unsigned long long current, start, playbackStart;
     unsigned offset, length, prevOffset;
@@ -193,14 +193,14 @@ void* Transmitter::transmit(void* params)
     current = ACCESS64(peripherals, TCNT_BASE);
     playbackStart = current;
 
-    while (*transmitting) {
+    while (transmitting) {
         start = current;
 
-        while ((*buffer == NULL) && *transmitting) {
+        while ((*buffer == NULL) && transmitting) {
             usleep(1);
             current = ACCESS64(peripherals, TCNT_BASE);
         }
-        if (!*transmitting) {
+        if (!transmitting) {
             break;
         }
         if (*restart) {
@@ -230,7 +230,7 @@ void* Transmitter::transmit(void* params)
             value = (value < -1.0) ? -1.0 : ((value > 1.0) ? 1.0 : value);
 #endif
 
-            ACCESS(peripherals, CLK0DIV_BASE) = (0x5A << 24) | ((*clockDivisor) - (int)(round(value * 16.0)));
+            ACCESS(peripherals, CLK0DIV_BASE) = (0x5A << 24) | ((clockDivisor) - (int)(round(value * 16.0)));
             while (offset == prevOffset) {
                 asm("nop");
                 current = ACCESS64(peripherals, TCNT_BASE);

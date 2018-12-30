@@ -51,8 +51,9 @@ class Transmitter
         Transmitter();
         static void* transmit(void* params);
 
-        void* peripherals;
-        bool forceStop, transmitting;
+        static void* peripherals;
+        static bool transmitting;
+        bool forceStop;
 };
 
 #endif // TRANSMITTER_H
