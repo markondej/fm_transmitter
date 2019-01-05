@@ -31,24 +31,38 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef ERROR_REPORTER_H
-#define ERROR_REPORTER_H
+#include "sample.h"
 
-#include <exception>
-#include <string>
-
-using std::exception;
-using std::string;
-
-class ErrorReporter : public exception
+Sample::Sample(char *data, unsigned short channels, unsigned short bitsPerChannel)
+    : value(0)
 {
-    public:
-        explicit ErrorReporter(string message);
-        virtual ~ErrorReporter() throw();
+    int sum = 0;
+    short *channelValues = new short[channels];
+	short multiplier = bitsPerChannel >> 3;
+	for (unsigned i = 0; i < channels; i++) {
+        if (multiplier > 1) {
+            channelValues[i] = (data[(i + 1) * multiplier - 1] << 8) | data[(i + 1) * multiplier - 2];
+	    } else {
+            channelValues[i] = ((short)(unsigned char)data[i] - 0x80) << 8;
+        }
+        sum += channelValues[i];
+    }
+    value = sum / channels;
+    delete[] channelValues;
+}
 
-        virtual const char *what() const throw();
-    protected:
-        string errorMessage;
-};
+Sample::Sample(const Sample &source)
+    : value(source.value)
+{
+}
 
-#endif // ERROR_REPORTER_H
+Sample &Sample::operator=(const Sample &source)
+{
+	value = source.value;
+	return *this;
+}
+
+float Sample::getMonoValue()
+{
+    return (short)(value & 0xFF00) / 32768.0;
+}

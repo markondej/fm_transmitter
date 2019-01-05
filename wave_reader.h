@@ -1,7 +1,7 @@
 /*
     fm_transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2018, Marcin Kondej
+    Copyright (c) 2019, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -35,6 +35,7 @@
 #define WAVE_READER_H
 
 #include "pcm_wave_header.h"
+#include "sample.h"
 #include <string>
 #include <vector>
 
@@ -44,18 +45,20 @@ using std::string;
 class WaveReader
 {
     public:
-        WaveReader(string filename, bool &forceStop);
+        WaveReader(string filename, bool &continueFlag);
         virtual ~WaveReader();
         string getFilename();
         PCMWaveHeader getHeader();
-        vector<float>* getFrames(unsigned frameCount, bool &forceStop);
-        bool setFrameOffset(unsigned frameOffset);
+        vector<Sample> *getSamples(unsigned quantity, bool &continueFlag);
+        bool setSampleOffset(unsigned offset);
     private:
-        vector<char>* readData(unsigned bytesToRead, bool headerBytes, bool &forceStop, char* headerData);
-
+        vector<char> *readData(unsigned bytesToRead, bool headerBytes, bool &continueFlag);
+        WaveReader(const WaveReader &source);
+		WaveReader &operator=(const WaveReader &source);
+		
         string filename;
         PCMWaveHeader header;
-        unsigned dataOffset, headerOffset, currentFrameOffset;
+        unsigned dataOffset, headerOffset, currentDataOffset;
         int fileDescriptor;
 };
 

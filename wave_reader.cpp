@@ -1,7 +1,7 @@
 /*
     fm_transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2018, Marcin Kondej
+    Copyright (c) 2019, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -41,10 +41,9 @@
 using std::ostringstream;
 using std::exception;
 
-WaveReader::WaveReader(string filename, bool &forceStop) :
-    filename(filename), headerOffset(0), currentFrameOffset(0)
+WaveReader::WaveReader(string filename, bool &continueFlag) :
+    filename(filename), headerOffset(0), currentDataOffset(0)
 {
-    char* headerData = (char*)((void*)&header);
     ostringstream oss;
 
     if (!filename.empty()) {
@@ -60,15 +59,13 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
     }
 
     try {
-        readData(sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) + sizeof(PCMWaveHeader::format), true, forceStop, headerData);
-
+        readData(sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) + sizeof(PCMWaveHeader::format), true, continueFlag);
         if ((string(header.chunkID, 4) != string("RIFF")) || (string(header.format, 4) != string("WAVE"))) {
             oss << "Error while opening " << getFilename() << ", WAVE file expected";
             throw ErrorReporter(oss.str());
         }
 
-        readData(sizeof(PCMWaveHeader::subchunk1ID) + sizeof(PCMWaveHeader::subchunk1Size), true, forceStop, headerData);
-
+        readData(sizeof(PCMWaveHeader::subchunk1ID) + sizeof(PCMWaveHeader::subchunk1Size), true, continueFlag);
         unsigned subchunk1MinSize = sizeof(PCMWaveHeader::audioFormat) + sizeof(PCMWaveHeader::channels) +
             sizeof(PCMWaveHeader::sampleRate) + sizeof(PCMWaveHeader::byteRate) + sizeof(PCMWaveHeader::blockAlign) +
             sizeof(PCMWaveHeader::bitsPerSample);
@@ -77,8 +74,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
             throw ErrorReporter(oss.str());
         }
 
-        readData(header.subchunk1Size, true, forceStop, headerData);
-
+        readData(header.subchunk1Size, true, continueFlag);
         if ((header.audioFormat != WAVE_FORMAT_PCM) ||
             (header.byteRate != (header.bitsPerSample >> 3) * header.channels * header.sampleRate) ||
             (header.blockAlign != (header.bitsPerSample >> 3) * header.channels) ||
@@ -87,8 +83,7 @@ WaveReader::WaveReader(string filename, bool &forceStop) :
             throw ErrorReporter(oss.str());
         }
 
-        readData(sizeof(PCMWaveHeader::subchunk2ID) + sizeof(PCMWaveHeader::subchunk2Size), true, forceStop, headerData);
-
+        readData(sizeof(PCMWaveHeader::subchunk2ID) + sizeof(PCMWaveHeader::subchunk2Size), true, continueFlag);
         if (string(header.subchunk2ID, 4) != string("data")) {
             oss << "Error while opening " << getFilename() << ", data corrupted";
             throw ErrorReporter(oss.str());
@@ -112,13 +107,13 @@ WaveReader::~WaveReader()
     }
 }
 
-vector<char>* WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool &forceStop, char* headerData)
+vector<char> *WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool &continueFlag)
 {
     unsigned bytesRead = 0;
-    vector<char>* data = new vector<char>();
+    vector<char> *data = new vector<char>();
     data->resize(bytesToRead);
 
-    while ((bytesRead < bytesToRead) && !forceStop) {
+    while ((bytesRead < bytesToRead) && continueFlag) {
         int bytes = read(fileDescriptor, &(*data)[bytesRead], bytesToRead - bytesRead);
         if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
             (((unsigned)bytes < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
@@ -144,7 +139,7 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool 
         }
     }
 
-    if (forceStop) {
+    if (!continueFlag) {
         delete data;
         data = NULL;
     }
@@ -153,69 +148,56 @@ vector<char>* WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool 
         if (data == NULL) {
             throw ErrorReporter("Cannot obtain header, program interrupted");
         }
-        memcpy(&headerData[headerOffset], &(*data)[0], bytesRead);
+        memcpy(&((char *)&header)[headerOffset], &(*data)[0], bytesRead);
         headerOffset += bytesRead;
         delete data;
         data = NULL;
     } else {
-        currentFrameOffset += bytesRead;
+        currentDataOffset += bytesRead;
     }
 
     return data;
 }
 
-vector<float>* WaveReader::getFrames(unsigned frameCount, bool &forceStop) {
-    unsigned bytesToRead, bytesLeft, bytesPerFrame, offset;
-    vector<float>* frames = new vector<float>();
-    vector<char>* data;
+vector<Sample> *WaveReader::getSamples(unsigned quantity, bool &continueFlag) {
+    unsigned bytesToRead, bytesLeft, bytesPerSample;
+    vector<Sample> *samples = new vector<Sample>();
+    vector<char> *data;
 
-    bytesPerFrame = (header.bitsPerSample >> 3) * header.channels;
-    bytesToRead = frameCount * bytesPerFrame;
-    bytesLeft = header.subchunk2Size - currentFrameOffset;
+    bytesPerSample = (header.bitsPerSample >> 3) * header.channels;
+    bytesToRead = quantity * bytesPerSample;
+    bytesLeft = header.subchunk2Size - currentDataOffset;
     if (bytesToRead > bytesLeft) {
-        bytesToRead = bytesLeft - bytesLeft % bytesPerFrame;
-        frameCount = bytesToRead / bytesPerFrame;
+        bytesToRead = bytesLeft - bytesLeft % bytesPerSample;
+        quantity = bytesToRead / bytesPerSample;
     }
 
     try {
-        data = readData(bytesToRead, false, forceStop, NULL);
+        data = readData(bytesToRead, false, continueFlag);
     } catch (ErrorReporter &error) {
-        delete frames;
+        delete samples;
         throw error;
     }
     if (data == NULL) {
-        delete frames;
+        delete samples;
         return NULL;
     }
     if (data->size() < bytesToRead) {
-        frameCount = data->size() / bytesPerFrame;
+        quantity = data->size() / bytesPerSample;
     }
 
-    for (unsigned i = 0; i < frameCount; i++) {
-        offset = bytesPerFrame * i;
-        if (header.channels != 1) {
-            if (header.bitsPerSample != 8) {
-                frames->push_back(((int)(signed char)(*data)[offset + 1] + (int)(signed char)(*data)[offset + 3]) / (float)0x100);
-            } else {
-                frames->push_back(((int)(*data)[offset] + (int)(*data)[offset + 1]) / (float)0x100 - 1.0f);
-            }
-        } else {
-            if (header.bitsPerSample != 8) {
-                frames->push_back((signed char)(*data)[offset + 1] / (float)0x80);
-            } else {
-                frames->push_back((*data)[offset] / (float)0x80 - 1.0f);
-            }
-        }
+    for (unsigned i = 0; i < quantity; i++) {
+        samples->push_back(Sample(&(*data)[bytesPerSample * i], header.channels, header.bitsPerSample));
     }
 
     delete data;
-    return frames;
+    return samples;
 }
 
-bool WaveReader::setFrameOffset(unsigned frameOffset) {
+bool WaveReader::setSampleOffset(unsigned offset) {
     if (fileDescriptor != STDIN_FILENO) {
-        currentFrameOffset = frameOffset * (header.bitsPerSample >> 3) * header.channels;
-        if (lseek(fileDescriptor, dataOffset + currentFrameOffset, SEEK_SET) == -1) {
+        currentDataOffset = offset * (header.bitsPerSample >> 3) * header.channels;
+        if (lseek(fileDescriptor, dataOffset + currentDataOffset, SEEK_SET) == -1) {
             return false;
         }
     }

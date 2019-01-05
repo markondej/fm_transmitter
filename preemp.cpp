@@ -31,24 +31,29 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef ERROR_REPORTER_H
-#define ERROR_REPORTER_H
+#include "preemp.h"
 
-#include <exception>
-#include <string>
-
-using std::exception;
-using std::string;
-
-class ErrorReporter : public exception
+PreEmp::PreEmp(unsigned sampleRate)
+    : ratio(0.75 - 250000.0 / (float)(sampleRate * 75)), prevValue(0.0)
 {
-    public:
-        explicit ErrorReporter(string message);
-        virtual ~ErrorReporter() throw();
+}
 
-        virtual const char *what() const throw();
-    protected:
-        string errorMessage;
-};
+PreEmp::PreEmp(const PreEmp &source)
+    : ratio(source.ratio), prevValue(source.prevValue)
+{
+}
 
-#endif // ERROR_REPORTER_H
+PreEmp &PreEmp::operator=(const PreEmp &source)
+{
+	ratio = source.ratio;
+	prevValue = source.prevValue;
+	return *this;
+}
+
+float PreEmp::filter(float value)
+{
+	value = value + (value - prevValue) * ratio;
+	value = (value < -1.0) ? -1.0 : ((value > 1.0) ? 1.0 : value);
+	prevValue = value;
+    return value;
+}

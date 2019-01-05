@@ -1,7 +1,7 @@
 /*
     fm_transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2018, Marcin Kondej
+    Copyright (c) 2019, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -39,27 +39,28 @@
 
 using namespace std;
 
-bool stop = false;
-Transmitter* transmitter = NULL;
+bool play = true;
+Transmitter *transmitter = NULL;
 
 void sigIntHandler(int sigNum)
 {
     if (transmitter != NULL) {
         cout << "Stopping..." << endl;
         transmitter->stop();
-        stop = true;
+        play = false;
     }
 }
 
 int main(int argc, char** argv)
 {
     double frequency = 100.0;
+    unsigned short dmaChannel = 0;
     bool loop = false;
     string filename;
     bool showUsage = true;
-    int opt;
+    int opt, filesOffset;
 
-    while ((opt = getopt(argc, argv, "rf:")) != -1) {
+    while ((opt = getopt(argc, argv, "rf:d:v")) != -1) {
         switch (opt) {
             case 'r':
                 loop = true;
@@ -67,28 +68,40 @@ int main(int argc, char** argv)
             case 'f':
                 frequency = ::atof(optarg);
                 break;
+            case 'd':
+                dmaChannel = ::atof(optarg);
+                break;
+            case 'v':
+                cout << EXECUTABLE << " version: " << VERSION << endl;
+                return 0;
         }
     }
     if (optind < argc) {
-        filename = argv[optind];
+        filesOffset = optind;
         showUsage = false;
     }
     if (showUsage) {
-        cout << "Usage: " << argv[0] << " [-f frequency] [-r] FILE" << endl;
+        cout << "Usage: " << EXECUTABLE << " [-f <frequency>] [-d <dma_channel>] [-r] <file>" << endl;
         return 0;
     }
 
     signal(SIGINT, sigIntHandler);
 
     try {
-        transmitter = Transmitter::getInstance();
-        WaveReader reader(filename != "-" ? filename : string(), stop);
-        PCMWaveHeader header = reader.getHeader();
-        cout << "Playing: " << reader.getFilename() << ", "
-            << header.sampleRate << " Hz, "
-            << header.bitsPerSample << " bits, "
-            << ((header.channels > 0x01) ? "stereo" : "mono") << endl;
-        transmitter->play(&reader, frequency, 0, loop);
+        transmitter = &Transmitter::getInstance();
+        do {
+            filename = argv[optind++];
+            if ((optind == argc) && loop) {
+                optind = filesOffset;
+            }
+            WaveReader reader(filename != "-" ? filename : string(), play);
+            PCMWaveHeader header = reader.getHeader();
+            cout << "Playing: " << reader.getFilename() << ", "
+                << header.sampleRate << " Hz, "
+                << header.bitsPerSample << " bits, "
+                << ((header.channels > 0x01) ? "stereo" : "mono") << endl;
+            transmitter->play(reader, frequency, dmaChannel, optind < argc);
+        } while (play && (optind < argc));
     } catch (exception &error) {
         cout << "Error: " << error.what() << endl;
         return 1;
