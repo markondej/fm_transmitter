@@ -1,7 +1,7 @@
 # fm_transmitter
 Use Raspberry Pi as FM transmitter. Works on any Raspberry Pi board.
 
-This project uses the general clock output to produce frequency modulated radio communication. It is based on idea originaly presented by Oliver Mattos and Oskar Weigl on [http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter](PiFM project).
+This project uses the general clock output to produce frequency modulated radio communication. It is based on idea originaly presented by [Oliver Mattos and Oskar Weigl](http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter) on [PiFM project](http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter).
 
 ## How to use it
 To use this project You will have to build it. First, clone this repository, then use "make" command as shown below:
