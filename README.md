@@ -15,11 +15,11 @@ After successful build You can start transmitting by typing:
 sudo ./fm_transmitter -f 102.0 acoustic_guitar_duet.wav
 ```
 Where:
-* -f <frequency> - Specifies the frequency in MHz, 100.0 by default if not passed
+* -f frequency - Specifies the frequency in MHz, 100.0 by default if not passed
 * acoustic_guitar_duet.wav - Sample WAVE file, You can use your own
 
 Other options:
-* -d <dma_channel> - Specifies the used DMA channel (0 by default), pass 255 in order to disable DMA and use CPU
+* -d dma_channel - Specifies the used DMA channel (0 by default), pass 255 in order to disable DMA and use CPU
 * -r - Loops the playback
 
 ### Supported audio formats
