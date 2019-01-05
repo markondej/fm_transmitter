@@ -43,7 +43,7 @@ In case of performance drop down use ```plughw:1,0``` instead of ```hw:1,0```.
 Please keep in mind that transmitting on certain frequencies without special permissions may be illegal in your country.
 
 ## New features
-* DMA engine support
+* DMA peripheral support
 * works on any Raspberry Pi model
 * reads mono and stereo files
 * reads data from stdin
