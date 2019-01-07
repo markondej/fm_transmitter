@@ -371,6 +371,9 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
         }
         transmitting = false;
         pthread_join(thread, NULL);
+        if (buffer != NULL) {
+            delete buffer;
+        }
     }
     if (isError) {
         throw ErrorReporter(errorMessage);
