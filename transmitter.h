@@ -49,11 +49,17 @@ class Transmitter
         Transmitter();
         Transmitter(const Transmitter &source);
         Transmitter &operator=(const Transmitter &source);
-        static volatile void *getPeripheral(unsigned offset);
+        bool allocateMemory(unsigned size);
+        void freeMemory();
+        unsigned getAddress(volatile void *object);
+        static void *getPeripheral(unsigned offset);
         static void *transmit(void *params);
 
         static void *peripherals;
         static bool transmitting, clockInitialized, preserveCarrier;
+        unsigned memSize, memAddress, memHandle;
+        void *memAllocated;
+        int mBoxFd;
 };
 
 #endif // TRANSMITTER_H
