@@ -1,7 +1,7 @@
 /*
     fm_transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2015, Marcin Kondej
+    Copyright (c) 2019, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -44,9 +44,9 @@ class ErrorReporter : public exception
 {
     public:
         explicit ErrorReporter(string message);
-        virtual ~ErrorReporter() throw();        
+        virtual ~ErrorReporter() throw();
 
-	virtual const char* what() const throw();
+        virtual const char *what() const throw();
     protected:
         string errorMessage;
 };

@@ -1,7 +1,7 @@
 /*
     fm_transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2015, Marcin Kondej
+    Copyright (c) 2019, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -34,13 +34,7 @@
 #ifndef TRANSMITTER_H
 #define TRANSMITTER_H
 
-#include "error_reporter.h"
-#include "audio_format.h"
-#include <vector>
-
-using std::vector;
-
-#define BUFFER_TIME 1000000
+#include "wave_reader.h"
 
 using std::string;
 
@@ -48,21 +42,18 @@ class Transmitter
 {
     public:
         virtual ~Transmitter();
-
-        void play(string filename, double frequency, bool loop);
+        static Transmitter &getInstance();
+        void play(WaveReader &reader, double frequency, unsigned char dmaChannel, bool preserveCarrierOnExit);
         void stop();
-
-        static Transmitter* getInstance();
     private:
         Transmitter();
+        Transmitter(const Transmitter &source);
+        Transmitter &operator=(const Transmitter &source);
+        static volatile void *getPeripheral(unsigned offset);
+        static void *transmit(void *params);
 
-        bool forceStop, eof;
-
-        static void* peripherals;
-        static vector<float>* buffer;
-        static bool transmitting, restart;
-        static unsigned frameOffset, clockDivisor;
-        static void* transmit(void* params);
+        static void *peripherals;
+        static bool transmitting, clockInitialized, preserveCarrier;
 };
 
 #endif // TRANSMITTER_H
