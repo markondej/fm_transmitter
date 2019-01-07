@@ -64,5 +64,5 @@ Sample &Sample::operator=(const Sample &source)
 
 float Sample::getMonoValue()
 {
-    return (short)(value & 0xFF00) / 32768.0;
+    return value / 32768.0;
 }
