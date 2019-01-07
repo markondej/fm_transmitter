@@ -47,8 +47,8 @@ class Transmitter
         void stop();
     private:
         Transmitter();
-		Transmitter(const Transmitter &source);
-		Transmitter &operator=(const Transmitter &source);
+        Transmitter(const Transmitter &source);
+        Transmitter &operator=(const Transmitter &source);
         static volatile void *getPeripheral(unsigned offset);
         static void *transmit(void *params);
 

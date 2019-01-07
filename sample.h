@@ -39,7 +39,7 @@ class Sample
     public:
         Sample(char *data, unsigned short channels, unsigned short bitsPerChannel);
         Sample(const Sample &source);
-		Sample &operator=(const Sample &source);
+        Sample &operator=(const Sample &source);
         float getMonoValue();
     protected:
         short value;

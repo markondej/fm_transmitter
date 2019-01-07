@@ -34,26 +34,25 @@
 #include "preemp.h"
 
 PreEmp::PreEmp(unsigned sampleRate)
-    : ratio(0.75 - 250000.0 / (float)(sampleRate * 75)), prevValue(0.0)
+    : timeConst(sampleRate * 75.0e-6), prevValue(0.0)
 {
 }
 
 PreEmp::PreEmp(const PreEmp &source)
-    : ratio(source.ratio), prevValue(source.prevValue)
+    : timeConst(source.timeConst), prevValue(source.prevValue)
 {
 }
 
 PreEmp &PreEmp::operator=(const PreEmp &source)
 {
-	ratio = source.ratio;
-	prevValue = source.prevValue;
-	return *this;
+    timeConst = source.timeConst;
+    prevValue = source.prevValue;
+    return *this;
 }
 
 float PreEmp::filter(float value)
 {
-	value = value + (value - prevValue) * ratio;
-	value = (value < -1.0) ? -1.0 : ((value > 1.0) ? 1.0 : value);
-	prevValue = value;
+    prevValue = value;
+    value = value + (prevValue - value) / (1.0 - timeConst);
     return value;
 }

@@ -39,10 +39,10 @@ class PreEmp
     public:
         PreEmp(unsigned sampleRate);
         PreEmp(const PreEmp &source);
-		PreEmp &operator=(const PreEmp &source);
+        PreEmp &operator=(const PreEmp &source);
         float filter(float value);
     protected:
-        float ratio, prevValue;
+        float timeConst, prevValue;
 };
 
 #endif // PREEMP_H

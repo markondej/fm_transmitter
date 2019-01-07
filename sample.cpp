@@ -38,11 +38,11 @@ Sample::Sample(char *data, unsigned short channels, unsigned short bitsPerChanne
 {
     int sum = 0;
     short *channelValues = new short[channels];
-	short multiplier = bitsPerChannel >> 3;
-	for (unsigned i = 0; i < channels; i++) {
+    short multiplier = bitsPerChannel >> 3;
+    for (unsigned i = 0; i < channels; i++) {
         if (multiplier > 1) {
             channelValues[i] = (data[(i + 1) * multiplier - 1] << 8) | data[(i + 1) * multiplier - 2];
-	    } else {
+        } else {
             channelValues[i] = ((short)(unsigned char)data[i] - 0x80) << 8;
         }
         sum += channelValues[i];
@@ -58,8 +58,8 @@ Sample::Sample(const Sample &source)
 
 Sample &Sample::operator=(const Sample &source)
 {
-	value = source.value;
-	return *this;
+    value = source.value;
+    return *this;
 }
 
 float Sample::getMonoValue()

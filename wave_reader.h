@@ -54,8 +54,8 @@ class WaveReader
     private:
         vector<char> *readData(unsigned bytesToRead, bool headerBytes, bool &continueFlag);
         WaveReader(const WaveReader &source);
-		WaveReader &operator=(const WaveReader &source);
-		
+        WaveReader &operator=(const WaveReader &source);
+
         string filename;
         PCMWaveHeader header;
         unsigned dataOffset, headerOffset, currentDataOffset;

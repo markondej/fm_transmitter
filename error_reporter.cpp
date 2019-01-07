@@ -41,8 +41,8 @@ ErrorReporter::ErrorReporter(string message) :
 ErrorReporter::~ErrorReporter() throw() 
 {
 }
-		
+
 const char *ErrorReporter::what() const throw()
 {
-	return errorMessage.c_str();
+    return errorMessage.c_str();
 }

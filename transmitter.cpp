@@ -45,6 +45,7 @@ using std::ostringstream;
 using std::vector;
 
 #define PERIPHERALS_PHYS_BASE 0x7E000000
+#define BCM2835_PERI_VIRT_BASE 0x20000000
 #define DMA0_BASE_OFFSET 0x00007000
 #define DMA15_BASE_OFFSET 0x00E05000
 #define CLK0_BASE_OFFSET 0x00101070
@@ -53,12 +54,13 @@ using std::vector;
 #define PWM_BASE_OFFSET 0x0020C000
 #define TIMER_BASE_OFFSET 0x00003000
 
-#define BUFFER_TIME 1000000
-#define PWM_CLOCK_FREQUENCY 200
-#define PWM_CHANNEL_RANGE 32
-#define TIMING_FACTOR 1.237
-
+#define BCM2837_MEM_FLAG 0x04
+#define BCM2835_MEM_FLAG 0x0C
 #define PAGE_SIZE 4096
+
+#define BUFFER_TIME 1000000
+#define PWM_WRITES_PER_SAMPLE 10
+#define PWM_CHANNEL_RANGE 32
 
 struct TimerRegisters {
     unsigned ctlStatus;
@@ -92,7 +94,7 @@ struct DMAControllBlock {
     unsigned dstAddress;
     unsigned transferLen;
     unsigned stride;
-    unsigned nextCB;
+    unsigned nextCbAddress;
     unsigned reserved0;
     unsigned reserved1;
 };
@@ -105,7 +107,7 @@ struct DMARegisters {
     unsigned dstAddress;
     unsigned transferLen;
     unsigned stride;
-    unsigned nextCB;
+    unsigned nextCbAddress;
     unsigned debug;
 };
 
@@ -160,19 +162,19 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
 
     if (dmaChannel != 0xFF) {
         if (dmaChannel > 15) {
-			delete samples;
+            delete samples;
             throw ErrorReporter("DMA channel number out of range(0 - 15)");
         }
 
         int mbFd = mbox_open();
-		
-        unsigned reqMemSize = sizeof(unsigned) * (bufferSize + 1) + sizeof(DMAControllBlock) * (bufferSize << 1);
+
+        unsigned reqMemSize = sizeof(unsigned) * ((bufferSize << 1) + 1) + sizeof(DMAControllBlock) * (bufferSize << 1);
         if (reqMemSize % PAGE_SIZE) {
             reqMemSize = (reqMemSize / PAGE_SIZE + 1) * PAGE_SIZE;
         }
-        unsigned memHandle = mem_alloc(mbFd, reqMemSize, PAGE_SIZE, (bcm_host_get_peripheral_address() == 0x20000000) ? 0x0C : 0x04);
+        unsigned memHandle = mem_alloc(mbFd, reqMemSize, PAGE_SIZE, (bcm_host_get_peripheral_address() == BCM2835_PERI_VIRT_BASE) ? BCM2835_MEM_FLAG : BCM2837_MEM_FLAG);
         if (!memHandle) {
-			delete samples;
+            delete samples;
             throw ErrorReporter("Cannot allocate memory");
         }
         unsigned physAddr = mem_lock(mbFd, memHandle);
@@ -190,9 +192,10 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
         }
 
         ClockRegisters *pwmClk = (ClockRegisters *)getPeripheral(PWMCLK_BASE_OFFSET);
+        float pwmClkFreq = PWM_WRITES_PER_SAMPLE * PWM_CHANNEL_RANGE * header.sampleRate / 1000000;
         pwmClk->ctl = (0x5A << 24) | 0x06;
         usleep(1000);
-        pwmClk->div = (0x5A << 24) | ((500 << 12) / PWM_CLOCK_FREQUENCY);
+        pwmClk->div = (0x5A << 24) | (unsigned)((500 << 12) / pwmClkFreq);
         pwmClk->ctl = (0x5A << 24) | (0x01 << 4) | 0x06;
 
         PWMRegisters *pwm = (PWMRegisters *)getPeripheral(PWM_BASE_OFFSET);
@@ -201,40 +204,40 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
         pwm->status = 0x01FC;
         pwm->ctl = (0x01 << 6);
         usleep(1000);
-		pwm->chn1Range = PWM_CHANNEL_RANGE;
+        pwm->chn1Range = PWM_CHANNEL_RANGE;
         pwm->dmaConf = (0x01 << 31) | 0x0707;
         pwm->ctl = (0x01 << 5) | (0x01 << 2) | 0x01;
 
 #ifndef NO_PREEMP
-		PreEmp preEmp(header.sampleRate);
+        PreEmp preEmp(header.sampleRate);
 #endif
-		float value;
-		unsigned i;
-		
+        float value;
+        unsigned i, cbIndex = 0;
+
         DMAControllBlock *dmaCb = (DMAControllBlock *)(unsigned *)virtAddr;
         unsigned *clkDiv = (unsigned *)virtAddr + ((sizeof(DMAControllBlock) / sizeof(unsigned)) << 1) * bufferSize;
         unsigned *pwmFifoData = (unsigned *)virtAddr + (((sizeof(DMAControllBlock) / sizeof(unsigned)) << 1) + 1) * bufferSize;
-		unsigned pwmWrites = (unsigned)((PWM_CLOCK_FREQUENCY * 1000000.0 / PWM_CHANNEL_RANGE / header.sampleRate) * TIMING_FACTOR);
         for (i = 0; i < bufferSize; i++) {
             value = (*samples)[i].getMonoValue();
 #ifndef NO_PREEMP
             value = preEmp.filter(value);
 #endif
-            clkDiv[i] = (0x5A << 24) | ((clockDivisor) - (int)(round(value * 16.0)));
-			
-            dmaCb[i << 1].transferInfo = (0x01 << 26) | (0x01 << 3);
-            dmaCb[i << 1].srcAddress = physAddr + ((unsigned)&clkDiv[i] - (unsigned)virtAddr);
-            dmaCb[i << 1].dstAddress = PERIPHERALS_PHYS_BASE | (CLK0_BASE_OFFSET + 0x04);
-            dmaCb[i << 1].transferLen = sizeof(unsigned);
-            dmaCb[i << 1].stride = 0;
-            dmaCb[i << 1].nextCB = physAddr + ((unsigned)&dmaCb[(i << 1) + 1] - (unsigned)virtAddr);
-			
-            dmaCb[(i << 1) + 1].transferInfo = (0x01 << 26) | (0x05 << 16) | (0x01 << 6) | (0x01 << 3);
-            dmaCb[(i << 1) + 1].srcAddress = physAddr + ((unsigned)pwmFifoData - (unsigned)virtAddr);
-            dmaCb[(i << 1) + 1].dstAddress = PERIPHERALS_PHYS_BASE | (PWM_BASE_OFFSET + 0x18);
-            dmaCb[(i << 1) + 1].transferLen = sizeof(unsigned) * pwmWrites;
-            dmaCb[(i << 1) + 1].stride = 0;
-            dmaCb[(i << 1) + 1].nextCB = physAddr + ((unsigned)((i < bufferSize - 1) ? &dmaCb[(i << 1) + 2] : dmaCb) - (unsigned)virtAddr);
+            clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * 16.0));
+            dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x01 << 3);
+            dmaCb[cbIndex].srcAddress = physAddr + ((unsigned)&clkDiv[i] - (unsigned)virtAddr);
+            dmaCb[cbIndex].dstAddress = PERIPHERALS_PHYS_BASE | (CLK0_BASE_OFFSET + 0x04);
+            dmaCb[cbIndex].transferLen = sizeof(unsigned);
+            dmaCb[cbIndex].stride = 0;
+            dmaCb[cbIndex].nextCbAddress = physAddr + ((unsigned)&dmaCb[cbIndex + 1] - (unsigned)virtAddr);
+            cbIndex++;
+
+            dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x05 << 16) | (0x01 << 6) | (0x01 << 3);
+            dmaCb[cbIndex].srcAddress = physAddr + ((unsigned)pwmFifoData - (unsigned)virtAddr);
+            dmaCb[cbIndex].dstAddress = PERIPHERALS_PHYS_BASE | (PWM_BASE_OFFSET + 0x18);
+            dmaCb[cbIndex].transferLen = sizeof(unsigned) * PWM_WRITES_PER_SAMPLE;
+            dmaCb[cbIndex].stride = 0;
+            dmaCb[cbIndex].nextCbAddress = physAddr + ((unsigned)((i < bufferSize - 1) ? &dmaCb[cbIndex + 1] : dmaCb) - (unsigned)virtAddr);
+            cbIndex++;
         }
         *pwmFifoData = 0x00;        
         delete samples;
@@ -247,17 +250,18 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
         dma->ctlStatus = (0xFF << 16) | 0x01;
 
         usleep(BUFFER_TIME / 2);
-		
+
         bool isError = false;
         string errorMessage;
 
-		try {
+        try {
             while (!eof && transmitting) {
-			    samples = reader.getSamples(bufferSize, transmitting);
+                samples = reader.getSamples(bufferSize, transmitting);
                 if (samples == NULL) {
                     break;
                 }
                 eof = samples->size() < bufferSize;
+                cbIndex = 0;
                 for (i = 0; i < samples->size(); i++) {
                     value = (*samples)[i].getMonoValue();
 #ifndef NO_PREEMP
@@ -266,25 +270,26 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
                     while (i == (((dma->cbAddress - physAddr - ((unsigned)dmaCb - (unsigned)virtAddr)) / sizeof(DMAControllBlock)) >> 1)) {
                         usleep(1);
                     }
-                    clkDiv[i] = (0x5A << 24) | ((clockDivisor)-(int)(round(value * 16.0)));
+                    clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * 16.0));
+                    cbIndex += 2;
                 }
                delete samples;
             }
- 		} catch (ErrorReporter &error) {
-			preserveCarrier = false;
-			errorMessage = error.what();
-			isError = true;
-		}
+        } catch (ErrorReporter &error) {
+            preserveCarrier = false;
+            errorMessage = error.what();
+            isError = true;
+        }
 
-		if (eof) {
-			dmaCb[i << 1].nextCB = 0x00;
-		} else {
-			dmaCb[(bufferSize - 1) << 1].nextCB = 0x00;			
-		}
-		while (dma->cbAddress != 0x00) {
-			usleep(1);
-		}
-		
+        if (eof) {
+            dmaCb[cbIndex].nextCbAddress = 0x00;
+        } else {
+            dmaCb[(bufferSize - 1) << 1].nextCbAddress = 0x00;
+        }
+        while (dma->cbAddress != 0x00) {
+            usleep(1);
+        }
+
         dma->ctlStatus = (0x01 << 31);
         pwm->ctl = 0x00;
 
@@ -419,7 +424,7 @@ void *Transmitter::transmit(void *params)
 #ifndef NO_PREEMP
             value = preEmp.filter(value);
 #endif
-            clk0->div = (0x5A << 24) | ((*clockDivisor) - (int)(round(value * 16.0)));
+            clk0->div = (0x5A << 24) | (*clockDivisor - (int)round(value * 16.0));
             while (offset == prevOffset) {
                 usleep(1); // asm("nop"); 
                 current = *(volatile unsigned long long *)&timer->low;
