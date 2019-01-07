@@ -43,7 +43,7 @@ class Transmitter
     public:
         virtual ~Transmitter();
         static Transmitter &getInstance();
-        void play(WaveReader &reader, double frequency, unsigned char dmaChannel, bool preserveCarrierOnExit);
+        void play(WaveReader &reader, double frequency, double bandwidth, unsigned char dmaChannel, bool preserveCarrierOnExit);
         void stop();
     private:
         Transmitter();

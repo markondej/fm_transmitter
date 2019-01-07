@@ -178,7 +178,7 @@ unsigned Transmitter::getAddress(volatile void *object)
     return (memSize) ? memAddress + ((unsigned)object - (unsigned)memAllocated) : 0x00000000;
 }
 
-void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaChannel, bool preserveCarrierOnExit)
+void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, unsigned char dmaChannel, bool preserveCarrierOnExit)
 {
     if (transmitting) {
         throw ErrorReporter("Cannot play, transmitter already in use");
@@ -196,6 +196,7 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
     bool eof = samples->size() < bufferSize;
 
     unsigned clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
+    unsigned divisorRange = (unsigned)((500 << 12) / (frequency + 0.5 * bandwidth) + 0.5) - clockDivisor;
     bool isError = false;
     string errorMessage;
 
@@ -252,7 +253,7 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
 #ifndef NO_PREEMP
             value = preEmp.filter(value);
 #endif
-            clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * 16.0));
+            clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
             dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x01 << 3);
             dmaCb[cbIndex].srcAddress = getAddress(&clkDiv[i]);
             dmaCb[cbIndex].dstAddress = PERIPHERALS_PHYS_BASE | (CLK0_BASE_OFFSET + 0x04);
@@ -297,7 +298,7 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
                     while (i == (((dma->cbAddress - getAddress(dmaCb)) / sizeof(DMAControllBlock)) >> 1)) {
                         usleep(1);
                     }
-                    clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * 16.0));
+                    clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
                     cbIndex += 2;
                 }
                delete samples;
@@ -330,10 +331,11 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
         unsigned sampleOffset = 0;
         vector<Sample> *buffer = samples;
 
-        void *transmitterParams[4] = {
+        void *transmitterParams[5] = {
             (void *)&buffer,
             (void *)&sampleOffset,
             (void *)&clockDivisor,
+            (void *)&divisorRange,
             (void *)&header.sampleRate
         };
 
@@ -389,7 +391,8 @@ void *Transmitter::transmit(void *params)
     vector<Sample> **buffer = (vector<Sample> **)((void **)params)[0];
     unsigned *sampleOffset = (unsigned *)((void **)params)[1];
     unsigned *clockDivisor = (unsigned *)((void **)params)[2];
-    unsigned *sampleRate = (unsigned *)((void **)params)[3];
+    unsigned *divisorRange = (unsigned *)((void **)params)[3];
+    unsigned *sampleRate = (unsigned *)((void **)params)[4];
 
     unsigned offset, length, prevOffset;
     vector<Sample> *samples = NULL;
@@ -442,7 +445,7 @@ void *Transmitter::transmit(void *params)
 #ifndef NO_PREEMP
             value = preEmp.filter(value);
 #endif
-            clk0->div = (0x5A << 24) | (*clockDivisor - (int)round(value * 16.0));
+            clk0->div = (0x5A << 24) | (*clockDivisor - (int)round(value * (*divisorRange)));
             while (offset == prevOffset) {
                 usleep(1); // asm("nop"); 
                 current = *(unsigned long long *)&timer->low;
