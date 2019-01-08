@@ -119,10 +119,6 @@ vector<char> *WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool 
             (((unsigned)bytes < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
             delete data;
 
-            if (fileDescriptor != STDIN_FILENO) {
-                close(fileDescriptor);
-            }
-
             ostringstream oss;
             oss << "Error while reading " << getFilename() << ", file is corrupted";
             throw ErrorReporter(oss.str());
