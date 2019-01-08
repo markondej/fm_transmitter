@@ -90,6 +90,7 @@ int main(int argc, char** argv)
     }
 
     signal(SIGINT, sigIntHandler);
+    signal(SIGTSTP, sigIntHandler);
 
     try {
         transmitter = &Transmitter::getInstance();
