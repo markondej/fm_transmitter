@@ -101,7 +101,7 @@ int main(int argc, char** argv)
             }
             WaveReader reader(filename != "-" ? filename : string(), play);
             PCMWaveHeader header = reader.getHeader();
-            cout << "Broadcasting on " << frequency << " MHz with " 
+            cout << "Broadcasting at " << frequency << " MHz with " 
                 << bandwidth << " kHz bandwidth" << endl;
             cout << "Playing: " << reader.getFilename() << ", "
                 << header.sampleRate << " Hz, "
