@@ -195,8 +195,8 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
     }
     bool eof = samples->size() < bufferSize;
 
-    unsigned clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
-    unsigned divisorRange = (unsigned)((500 << 12) / (frequency + 0.5 * bandwidth) + 0.5) - clockDivisor;
+    unsigned clockDivisor = (unsigned)round((500 << 12) / frequency);
+    unsigned divisorRange = clockDivisor - (unsigned)round((500 << 12) / (frequency + 0.0005 * bandwidth));
     bool isError = false;
     string errorMessage;
 
@@ -206,7 +206,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             throw ErrorReporter("DMA channel number out of range (0 - 15)");
         }
 
-        if (!allocateMemory(sizeof(unsigned) * ((bufferSize << 1) + 1) + sizeof(DMAControllBlock) * (bufferSize << 1))) {
+        if (!allocateMemory(sizeof(unsigned) * ((2 * bufferSize) + 1) + sizeof(DMAControllBlock) * (2 * bufferSize))) {
             delete samples;
             throw ErrorReporter("Cannot allocate memory");
         }
@@ -246,8 +246,8 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
 #endif
 
         volatile DMAControllBlock *dmaCb = (DMAControllBlock *)memAllocated;
-        volatile unsigned *clkDiv = (unsigned *)memAllocated + ((sizeof(DMAControllBlock) / sizeof(unsigned)) << 1) * bufferSize;
-        volatile unsigned *pwmFifoData = (unsigned *)memAllocated + (((sizeof(DMAControllBlock) / sizeof(unsigned)) << 1) + 1) * bufferSize;
+        volatile unsigned *clkDiv = (unsigned *)memAllocated + 2 * (sizeof(DMAControllBlock) / sizeof(unsigned)) * bufferSize;
+        volatile unsigned *pwmFifoData = (unsigned *)memAllocated + 2 * ((sizeof(DMAControllBlock) / sizeof(unsigned)) + 1) * bufferSize;
         for (i = 0; i < bufferSize; i++) {
             value = (*samples)[i].getMonoValue();
 #ifndef NO_PREEMP
@@ -280,7 +280,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
         dma->cbAddress = getAddress(dmaCb);
         dma->ctlStatus = (0xFF << 16) | 0x01;
 
-        usleep(BUFFER_TIME >> 2);
+        usleep(BUFFER_TIME / 4);
 
         try {
             while (!eof && transmitting) {
@@ -295,7 +295,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
 #ifndef NO_PREEMP
                     value = preEmp.filter(value);
 #endif
-                    while (i == (((dma->cbAddress - getAddress(dmaCb)) / sizeof(DMAControllBlock)) >> 1)) {
+                    while (i == ((dma->cbAddress - getAddress(dmaCb)) / (2 *sizeof(DMAControllBlock)))) {
                         usleep(1);
                     }
                     clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
@@ -309,11 +309,8 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             isError = true;
         }
 
-        if (eof || isError) {
-            dmaCb[cbIndex].nextCbAddress = 0x00;
-        } else {
-            dmaCb[(bufferSize - 1) << 1].nextCbAddress = 0x00;
-        }
+        cbIndex -= 2;
+        dmaCb[cbIndex].nextCbAddress = 0x00;
         while (dma->cbAddress != 0x00) {
             usleep(1);
         }
@@ -348,7 +345,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             throw ErrorReporter(oss.str());
         }
 
-        usleep(BUFFER_TIME >> 1);
+        usleep(BUFFER_TIME / 2);
 
         try {
             while (!eof && transmitting) {
@@ -363,7 +360,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
                     eof = samples->size() < bufferSize;
                     buffer = samples;
                 }
-                usleep(BUFFER_TIME >> 1);
+                usleep(BUFFER_TIME / 2);
             }
         }
         catch (ErrorReporter &error) {

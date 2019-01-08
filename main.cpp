@@ -54,7 +54,7 @@ void sigIntHandler(int sigNum)
 int main(int argc, char** argv)
 {
     double frequency = 100.0;
-    double bandwidth = 0.1;
+    double bandwidth = 100.0;
     unsigned short dmaChannel = 0;
     bool loop = false;
     string filename;
