@@ -18,10 +18,12 @@ sudo ./fm_transmitter -f 102.0 acoustic_guitar_duet.wav
 Where:
 * -f frequency - Specifies the frequency in MHz, 100.0 by default if not passed
 * acoustic_guitar_duet.wav - Sample WAVE file, You can use your own
+
 Other options:
 * -d dma_channel - Specifies DMA channel to be used (0 by default), type 255 to disable DMA transfer, CPU will be used instead
 * -b bandwidth - Specifies the bandwidth in kHz, 100 by default
 * -r - Loops the playback
+
 After transmission has begun, simply tune an FM receiver to chosen frequency, You should hear the playback.
 ### Supported audio formats
 You can transmitt uncompressed WAVE (.wav) files directly or read audio data from stdin, eg.:
@@ -47,4 +49,5 @@ Please keep in mind that transmitting on certain frequencies without special per
 * works on every Raspberry Pi model
 * reads mono and stereo files
 * reads data from stdin
+
 Included sample audio was created by [graham_makes](https://freesound.org/people/graham_makes/sounds/449409/) and published on [freesound.org](https://freesound.org/)
