@@ -85,7 +85,7 @@ int main(int argc, char** argv)
         showUsage = false;
     }
     if (showUsage) {
-        cout << "Usage: " << EXECUTABLE << " [-f <frequency>] [-d <dma_channel>] [-r] <file>" << endl;
+        cout << "Usage: " << EXECUTABLE << " [-f <frequency>] [-b <bandwidth>] [-d <dma_channel>] [-r] <file>" << endl;
         return 0;
     }
 
@@ -100,6 +100,8 @@ int main(int argc, char** argv)
             }
             WaveReader reader(filename != "-" ? filename : string(), play);
             PCMWaveHeader header = reader.getHeader();
+            cout << "Broadcasting on " << frequency << " MHz with " 
+                << bandwidth << " kHz bandwidth" << endl;
             cout << "Playing: " << reader.getFilename() << ", "
                 << header.sampleRate << " Hz, "
                 << header.bitsPerSample << " bits, "
