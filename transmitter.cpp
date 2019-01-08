@@ -178,7 +178,7 @@ unsigned Transmitter::getAddress(volatile void *object)
     return (memSize) ? memAddress + ((unsigned)object - (unsigned)memAllocated) : 0x00000000;
 }
 
-void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaChannel, bool preserveCarrierOnExit)
+void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, unsigned char dmaChannel, bool preserveCarrierOnExit)
 {
     if (transmitting) {
         throw ErrorReporter("Cannot play, transmitter already in use");
@@ -195,7 +195,8 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
     }
     bool eof = samples->size() < bufferSize;
 
-    unsigned clockDivisor = (unsigned)((500 << 12) / frequency + 0.5);
+    unsigned clockDivisor = (unsigned)round((500 << 12) / frequency);
+    unsigned divisorRange = clockDivisor - (unsigned)round((500 << 12) / (frequency + 0.0005 * bandwidth));
     bool isError = false;
     string errorMessage;
 
@@ -205,7 +206,7 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
             throw ErrorReporter("DMA channel number out of range (0 - 15)");
         }
 
-        if (!allocateMemory(sizeof(unsigned) * ((bufferSize << 1) + 1) + sizeof(DMAControllBlock) * (bufferSize << 1))) {
+        if (!allocateMemory(sizeof(unsigned) * ((2 * bufferSize) + 1) + sizeof(DMAControllBlock) * (2 * bufferSize))) {
             delete samples;
             throw ErrorReporter("Cannot allocate memory");
         }
@@ -245,14 +246,14 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
 #endif
 
         volatile DMAControllBlock *dmaCb = (DMAControllBlock *)memAllocated;
-        volatile unsigned *clkDiv = (unsigned *)memAllocated + ((sizeof(DMAControllBlock) / sizeof(unsigned)) << 1) * bufferSize;
-        volatile unsigned *pwmFifoData = (unsigned *)memAllocated + (((sizeof(DMAControllBlock) / sizeof(unsigned)) << 1) + 1) * bufferSize;
+        volatile unsigned *clkDiv = (unsigned *)memAllocated + 2 * (sizeof(DMAControllBlock) / sizeof(unsigned)) * bufferSize;
+        volatile unsigned *pwmFifoData = (unsigned *)memAllocated + 2 * ((sizeof(DMAControllBlock) / sizeof(unsigned)) + 1) * bufferSize;
         for (i = 0; i < bufferSize; i++) {
             value = (*samples)[i].getMonoValue();
 #ifndef NO_PREEMP
             value = preEmp.filter(value);
 #endif
-            clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * 16.0));
+            clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
             dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x01 << 3);
             dmaCb[cbIndex].srcAddress = getAddress(&clkDiv[i]);
             dmaCb[cbIndex].dstAddress = PERIPHERALS_PHYS_BASE | (CLK0_BASE_OFFSET + 0x04);
@@ -279,7 +280,7 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
         dma->cbAddress = getAddress(dmaCb);
         dma->ctlStatus = (0xFF << 16) | 0x01;
 
-        usleep(BUFFER_TIME >> 2);
+        usleep(BUFFER_TIME / 4);
 
         try {
             while (!eof && transmitting) {
@@ -294,10 +295,10 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
 #ifndef NO_PREEMP
                     value = preEmp.filter(value);
 #endif
-                    while (i == (((dma->cbAddress - getAddress(dmaCb)) / sizeof(DMAControllBlock)) >> 1)) {
+                    while (i == ((dma->cbAddress - getAddress(dmaCb)) / (2 *sizeof(DMAControllBlock)))) {
                         usleep(1);
                     }
-                    clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * 16.0));
+                    clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
                     cbIndex += 2;
                 }
                delete samples;
@@ -308,11 +309,8 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
             isError = true;
         }
 
-        if (eof || isError) {
-            dmaCb[cbIndex].nextCbAddress = 0x00;
-        } else {
-            dmaCb[(bufferSize - 1) << 1].nextCbAddress = 0x00;
-        }
+        cbIndex -= 2;
+        dmaCb[cbIndex].nextCbAddress = 0x00;
         while (dma->cbAddress != 0x00) {
             usleep(1);
         }
@@ -330,10 +328,11 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
         unsigned sampleOffset = 0;
         vector<Sample> *buffer = samples;
 
-        void *transmitterParams[4] = {
+        void *transmitterParams[5] = {
             (void *)&buffer,
             (void *)&sampleOffset,
             (void *)&clockDivisor,
+            (void *)&divisorRange,
             (void *)&header.sampleRate
         };
 
@@ -346,7 +345,7 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
             throw ErrorReporter(oss.str());
         }
 
-        usleep(BUFFER_TIME >> 1);
+        usleep(BUFFER_TIME / 2);
 
         try {
             while (!eof && transmitting) {
@@ -361,7 +360,7 @@ void Transmitter::play(WaveReader &reader, double frequency, unsigned char dmaCh
                     eof = samples->size() < bufferSize;
                     buffer = samples;
                 }
-                usleep(BUFFER_TIME >> 1);
+                usleep(BUFFER_TIME / 2);
             }
         }
         catch (ErrorReporter &error) {
@@ -389,7 +388,8 @@ void *Transmitter::transmit(void *params)
     vector<Sample> **buffer = (vector<Sample> **)((void **)params)[0];
     unsigned *sampleOffset = (unsigned *)((void **)params)[1];
     unsigned *clockDivisor = (unsigned *)((void **)params)[2];
-    unsigned *sampleRate = (unsigned *)((void **)params)[3];
+    unsigned *divisorRange = (unsigned *)((void **)params)[3];
+    unsigned *sampleRate = (unsigned *)((void **)params)[4];
 
     unsigned offset, length, prevOffset;
     vector<Sample> *samples = NULL;
@@ -442,7 +442,7 @@ void *Transmitter::transmit(void *params)
 #ifndef NO_PREEMP
             value = preEmp.filter(value);
 #endif
-            clk0->div = (0x5A << 24) | (*clockDivisor - (int)round(value * 16.0));
+            clk0->div = (0x5A << 24) | (*clockDivisor - (int)round(value * (*divisorRange)));
             while (offset == prevOffset) {
                 usleep(1); // asm("nop"); 
                 current = *(unsigned long long *)&timer->low;

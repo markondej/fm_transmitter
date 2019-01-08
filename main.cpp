@@ -54,13 +54,14 @@ void sigIntHandler(int sigNum)
 int main(int argc, char** argv)
 {
     double frequency = 100.0;
+    double bandwidth = 100.0;
     unsigned short dmaChannel = 0;
     bool loop = false;
     string filename;
     bool showUsage = true;
     int opt, filesOffset;
 
-    while ((opt = getopt(argc, argv, "rf:d:v")) != -1) {
+    while ((opt = getopt(argc, argv, "rf:d:b:v")) != -1) {
         switch (opt) {
             case 'r':
                 loop = true;
@@ -70,6 +71,9 @@ int main(int argc, char** argv)
                 break;
             case 'd':
                 dmaChannel = ::atof(optarg);
+                break;
+            case 'b':
+                bandwidth = ::atof(optarg);
                 break;
             case 'v':
                 cout << EXECUTABLE << " version: " << VERSION << endl;
@@ -81,11 +85,12 @@ int main(int argc, char** argv)
         showUsage = false;
     }
     if (showUsage) {
-        cout << "Usage: " << EXECUTABLE << " [-f <frequency>] [-d <dma_channel>] [-r] <file>" << endl;
+        cout << "Usage: " << EXECUTABLE << " [-f <frequency>] [-b <bandwidth>] [-d <dma_channel>] [-r] <file>" << endl;
         return 0;
     }
 
     signal(SIGINT, sigIntHandler);
+    signal(SIGTSTP, sigIntHandler);
 
     try {
         transmitter = &Transmitter::getInstance();
@@ -96,11 +101,13 @@ int main(int argc, char** argv)
             }
             WaveReader reader(filename != "-" ? filename : string(), play);
             PCMWaveHeader header = reader.getHeader();
+            cout << "Broadcasting on " << frequency << " MHz with " 
+                << bandwidth << " kHz bandwidth" << endl;
             cout << "Playing: " << reader.getFilename() << ", "
                 << header.sampleRate << " Hz, "
                 << header.bitsPerSample << " bits, "
                 << ((header.channels > 0x01) ? "stereo" : "mono") << endl;
-            transmitter->play(reader, frequency, dmaChannel, optind < argc);
+            transmitter->play(reader, frequency, bandwidth, dmaChannel, optind < argc);
         } while (play && (optind < argc));
     } catch (exception &error) {
         cout << "Error: " << error.what() << endl;
