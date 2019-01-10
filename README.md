@@ -32,6 +32,7 @@ sox star_wars.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 
 ```
 Please note only uncompressed WAVE files are supported. If You expire "corrupted data" error try converting file, eg. by using SoX:
 ```
+sudo apt-get install sox libsox-fmt-mp3
 sox my-audio.mp3 -r 22050 -c 1 -b 16 -t wav my-converted-audio.wav
 sudo ./fm_transmitter -f 100.6 my-converted-audio.wav
 ```
