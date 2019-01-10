@@ -175,12 +175,12 @@ void Transmitter::freeMemory()
     memSize = 0;
 }
 
-unsigned Transmitter::getMemoryAddress(volatile *object)
+unsigned Transmitter::getMemoryAddress(void *object)
 {
     return (memSize) ? memAddress + ((unsigned)object - (unsigned)memAllocated) : 0x00000000;
 }
 
-unsigned Transmitter::getPeriheralAddress(volatile void *object) {
+unsigned Transmitter::getPeripheralAddress(volatile void *object) {
     return PERIPHERALS_PHYS_BASE + ((unsigned)object - (unsigned)peripherals);
 }
 
@@ -274,7 +274,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
 
             dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x05 << 16) | (0x01 << 6) | (0x01 << 3);
             dmaCb[cbIndex].srcAddress = getMemoryAddress(pwmFifoData);
-            dmaCb[cbIndex].dstAddress = getPeriheralAddress(&pwm->fifoIn);
+            dmaCb[cbIndex].dstAddress = getPeripheralAddress(&pwm->fifoIn);
             dmaCb[cbIndex].transferLen = sizeof(unsigned) * PWM_WRITES_PER_SAMPLE;
             dmaCb[cbIndex].stride = 0;
             dmaCb[cbIndex].nextCbAddress = getMemoryAddress((i < bufferSize - 1) ? &dmaCb[cbIndex + 1] : dmaCb);

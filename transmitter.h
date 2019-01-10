@@ -51,8 +51,8 @@ class Transmitter
         Transmitter &operator=(const Transmitter &source);
         bool allocateMemory(unsigned size);
         void freeMemory();
-        unsigned getMemoryAddress(volatile void *object);
-        unsigned getPeripheralAddress(void *object);
+        unsigned getMemoryAddress(void *object);
+        unsigned getPeripheralAddress(volatile void *object);
         static void *getPeripheral(unsigned offset);
         static void *transmit(void *params);
 
