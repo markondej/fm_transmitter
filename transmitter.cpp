@@ -175,7 +175,7 @@ void Transmitter::freeMemory()
     memSize = 0;
 }
 
-unsigned Transmitter::getMemoryAddress(void *object)
+unsigned Transmitter::getMemoryAddress(volatile void *object)
 {
     return (memSize) ? memAddress + ((unsigned)object - (unsigned)memAllocated) : 0x00000000;
 }
@@ -255,9 +255,9 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
         PreEmp preEmp(header.sampleRate);
 #endif
 
-        DMAControllBlock *dmaCb = (DMAControllBlock *)memAllocated;
-        unsigned *clkDiv = (unsigned *)memAllocated + 2 * (sizeof(DMAControllBlock) / sizeof(unsigned)) * bufferSize;
-        unsigned *pwmFifoData = (unsigned *)memAllocated + 2 * ((sizeof(DMAControllBlock) / sizeof(unsigned)) + 1) * bufferSize;
+        volatile DMAControllBlock *dmaCb = (DMAControllBlock *)memAllocated;
+        volatile unsigned *clkDiv = (unsigned *)memAllocated + 2 * (sizeof(DMAControllBlock) / sizeof(unsigned)) * bufferSize;
+        volatile unsigned *pwmFifoData = (unsigned *)memAllocated + 2 * ((sizeof(DMAControllBlock) / sizeof(unsigned)) + 1) * bufferSize;
         for (i = 0; i < bufferSize; i++) {
             value = (*samples)[i].getMonoValue();
 #ifndef NO_PREEMP
