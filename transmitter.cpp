@@ -305,7 +305,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
 #ifndef NO_PREEMP
                     value = preEmp.filter(value);
 #endif
-                    while (i == ((dma->cbAddress - getMemoryAddress(dmaCb)) / (2 *sizeof(DMAControllBlock)))) {
+                    while (i == ((dma->cbAddress - getMemoryAddress(dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
                         usleep(1);
                     }
                     clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
