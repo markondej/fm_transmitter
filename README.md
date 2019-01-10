@@ -5,7 +5,7 @@ Just get an FM receiver, connect 20 - 40 cm plain wire to Raspberry Pi's GPIO4 (
 
 This project uses the general clock output to produce frequency modulated radio communication. It is based on idea originally presented by [Oliver Mattos and Oskar Weigl](http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter) at [PiFM project](http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter).
 ## How to use it
-To use this project You will have to build it. First, clone this repository, then use "make" command as shown below:
+To use this project You will have to build executable. First, clone this repository, then use "make" command as shown below:
 ```
 git clone https://github.com/markondej/fm_transmitter
 cd fm_transmitter
@@ -28,6 +28,7 @@ After transmission has begun, simply tune an FM receiver to chosen frequency, Yo
 ### Supported audio formats
 You can transmitt uncompressed WAVE (.wav) files directly or read audio data from stdin, eg.:
 ```
+sudo apt-get install sox
 sox star_wars.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
 ```
 Please note only uncompressed WAVE files are supported. If You expire "corrupted data" error try converting file, eg. by using SoX:
