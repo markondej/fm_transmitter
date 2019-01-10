@@ -11,7 +11,7 @@ git clone https://github.com/markondej/fm_transmitter
 cd fm_transmitter
 make
 ``` 
-After successful build You can start transmitting by running "fm_transmitter" program:
+After successful build You can start transmitting by executing "fm_transmitter" program:
 ```
 sudo ./fm_transmitter -f 102.0 acoustic_guitar_duet.wav
 ```
