@@ -81,9 +81,11 @@ struct PWMRegisters {
     unsigned ctl;
     unsigned status;
     unsigned dmaConf;
+    unsigned reserved0;
     unsigned chn1Range;
     unsigned chn1Data;
     unsigned fifoIn;
+    unsigned reserved1;
     unsigned chn2Range;
     unsigned chn2Data;
 };
@@ -173,9 +175,17 @@ void Transmitter::freeMemory()
     memSize = 0;
 }
 
-unsigned Transmitter::getAddress(volatile void *object)
+unsigned Transmitter::getMemoryAddress(volatile void *object)
 {
     return (memSize) ? memAddress + ((unsigned)object - (unsigned)memAllocated) : 0x00000000;
+}
+
+unsigned Transmitter::getPeripheralAddress(volatile void *object) {
+    return PERIPHERALS_PHYS_BASE + ((unsigned)object - (unsigned)peripherals);
+}
+
+void *Transmitter::getPeripheral(unsigned offset) {
+    return (void *)((unsigned)peripherals + offset);
 }
 
 void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, unsigned char dmaChannel, bool preserveCarrierOnExit)
@@ -255,19 +265,19 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
 #endif
             clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
             dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x01 << 3);
-            dmaCb[cbIndex].srcAddress = getAddress(&clkDiv[i]);
-            dmaCb[cbIndex].dstAddress = PERIPHERALS_PHYS_BASE | (CLK0_BASE_OFFSET + 0x04);
+            dmaCb[cbIndex].srcAddress = getMemoryAddress(&clkDiv[i]);
+            dmaCb[cbIndex].dstAddress = getPeripheralAddress(&clk0->div);
             dmaCb[cbIndex].transferLen = sizeof(unsigned);
             dmaCb[cbIndex].stride = 0;
-            dmaCb[cbIndex].nextCbAddress = getAddress(&dmaCb[cbIndex + 1]);
+            dmaCb[cbIndex].nextCbAddress = getMemoryAddress(&dmaCb[cbIndex + 1]);
             cbIndex++;
 
             dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x05 << 16) | (0x01 << 6) | (0x01 << 3);
-            dmaCb[cbIndex].srcAddress = getAddress(pwmFifoData);
-            dmaCb[cbIndex].dstAddress = PERIPHERALS_PHYS_BASE | (PWM_BASE_OFFSET + 0x18);
+            dmaCb[cbIndex].srcAddress = getMemoryAddress(pwmFifoData);
+            dmaCb[cbIndex].dstAddress = getPeripheralAddress(&pwm->fifoIn);
             dmaCb[cbIndex].transferLen = sizeof(unsigned) * PWM_WRITES_PER_SAMPLE;
             dmaCb[cbIndex].stride = 0;
-            dmaCb[cbIndex].nextCbAddress = getAddress((i < bufferSize - 1) ? &dmaCb[cbIndex + 1] : dmaCb);
+            dmaCb[cbIndex].nextCbAddress = getMemoryAddress((i < bufferSize - 1) ? &dmaCb[cbIndex + 1] : dmaCb);
             cbIndex++;
         }
         *pwmFifoData = 0x00;        
@@ -277,7 +287,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
         dma->ctlStatus = (0x01 << 31);
         usleep(1000);
         dma->ctlStatus = (0x01 << 2) | (0x01 << 1);
-        dma->cbAddress = getAddress(dmaCb);
+        dma->cbAddress = getMemoryAddress(dmaCb);
         dma->ctlStatus = (0xFF << 16) | 0x01;
 
         usleep(BUFFER_TIME / 4);
@@ -295,7 +305,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
 #ifndef NO_PREEMP
                     value = preEmp.filter(value);
 #endif
-                    while (i == ((dma->cbAddress - getAddress(dmaCb)) / (2 *sizeof(DMAControllBlock)))) {
+                    while (i == ((dma->cbAddress - getMemoryAddress(dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
                         usleep(1);
                     }
                     clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
@@ -377,10 +387,6 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
     if (isError) {
         throw ErrorReporter(errorMessage);
     }
-}
-
-void *Transmitter::getPeripheral(unsigned offset) {
-    return (void *)((unsigned)peripherals + offset);
 }
 
 void *Transmitter::transmit(void *params)
