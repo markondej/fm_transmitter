@@ -31,7 +31,7 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "sample.h"
+#include "sample.hpp"
 
 Sample::Sample(int8_t *data, uint16_t channels, uint16_t bitsPerChannel)
     : value(0)

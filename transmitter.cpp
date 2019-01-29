@@ -31,9 +31,9 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "transmitter.h"
+#include "transmitter.hpp"
 #include "preemp.hpp"
-#include "error_reporter.h"
+#include "error_reporter.hpp"
 #include "mailbox.h"
 #include <bcm_host.h>
 #include <sstream>

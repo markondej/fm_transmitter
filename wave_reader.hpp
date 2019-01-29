@@ -31,28 +31,35 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "preemp.hpp"
+#ifndef WAVE_READER_H
+#define WAVE_READER_H
 
-PreEmp::PreEmp(uint32_t sampleRate)
-    : timeConst(sampleRate * 75.0e-6), prevValue(0.0)
-{
-}
+#include "pcm_wave_header.hpp"
+#include "sample.hpp"
+#include <string>
+#include <vector>
 
-PreEmp::PreEmp(const PreEmp &source)
-    : timeConst(source.timeConst), prevValue(source.prevValue)
-{
-}
+using std::vector;
+using std::string;
 
-PreEmp &PreEmp::operator=(const PreEmp &source)
+class WaveReader
 {
-    timeConst = source.timeConst;
-    prevValue = source.prevValue;
-    return *this;
-}
+    public:
+        WaveReader(string filename, bool &continueFlag);
+        virtual ~WaveReader();
+        string getFilename();
+        PCMWaveHeader getHeader();
+        vector<Sample> *getSamples(uint32_t quantity, bool &continueFlag);
+        bool setSampleOffset(uint32_t offset);
+    private:
+        vector<int8_t> *readData(uint32_t bytesToRead, bool headerBytes, bool &continueFlag);
+        WaveReader(const WaveReader &source);
+        WaveReader &operator=(const WaveReader &source);
 
-float PreEmp::filter(float value)
-{
-    prevValue = value;
-    value = value + (prevValue - value) / (1.0 - timeConst);
-    return value;
-}
+        string filename;
+        PCMWaveHeader header;
+        uint32_t dataOffset, headerOffset, currentDataOffset;
+        int fileDescriptor;
+};
+
+#endif // WAVE_READER_H

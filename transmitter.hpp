@@ -31,28 +31,36 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "preemp.hpp"
+#ifndef TRANSMITTER_H
+#define TRANSMITTER_H
 
-PreEmp::PreEmp(uint32_t sampleRate)
-    : timeConst(sampleRate * 75.0e-6), prevValue(0.0)
-{
-}
+#include "wave_reader.h"
 
-PreEmp::PreEmp(const PreEmp &source)
-    : timeConst(source.timeConst), prevValue(source.prevValue)
-{
-}
+using std::string;
 
-PreEmp &PreEmp::operator=(const PreEmp &source)
+class Transmitter
 {
-    timeConst = source.timeConst;
-    prevValue = source.prevValue;
-    return *this;
-}
+    public:
+        virtual ~Transmitter();
+        static Transmitter &getInstance();
+        void play(WaveReader &reader, double frequency, double bandwidth, uint8_t dmaChannel, bool preserveCarrierOnExit);
+        void stop();
+    private:
+        Transmitter();
+        Transmitter(const Transmitter &source);
+        Transmitter &operator=(const Transmitter &source);
+        bool allocateMemory(uint32_t size);
+        void freeMemory();
+        uint32_t getMemoryAddress(volatile void *object);
+        uint32_t getPeripheralAddress(volatile void *object);
+        static void *getPeripheral(unsigned offset);
+        static void *transmit(void *params);
 
-float PreEmp::filter(float value)
-{
-    prevValue = value;
-    value = value + (prevValue - value) / (1.0 - timeConst);
-    return value;
-}
+        static void *peripherals;
+        static bool transmitting, clockInitialized, preserveCarrier;
+        uint32_t memSize, memAddress, memHandle;
+        void *memAllocated;
+        int mBoxFd;
+};
+
+#endif // TRANSMITTER_H
