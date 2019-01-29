@@ -43,22 +43,22 @@ class Transmitter
     public:
         virtual ~Transmitter();
         static Transmitter &getInstance();
-        void play(WaveReader &reader, double frequency, double bandwidth, unsigned char dmaChannel, bool preserveCarrierOnExit);
+        void play(WaveReader &reader, double frequency, double bandwidth, uint8_t dmaChannel, bool preserveCarrierOnExit);
         void stop();
     private:
         Transmitter();
         Transmitter(const Transmitter &source);
         Transmitter &operator=(const Transmitter &source);
-        bool allocateMemory(unsigned size);
+        bool allocateMemory(uint32_t size);
         void freeMemory();
-        unsigned getMemoryAddress(volatile void *object);
-        unsigned getPeripheralAddress(volatile void *object);
+        uint32_t getMemoryAddress(volatile void *object);
+        uint32_t getPeripheralAddress(volatile void *object);
         static void *getPeripheral(unsigned offset);
         static void *transmit(void *params);
 
         static void *peripherals;
         static bool transmitting, clockInitialized, preserveCarrier;
-        unsigned memSize, memAddress, memHandle;
+        uint32_t memSize, memAddress, memHandle;
         void *memAllocated;
         int mBoxFd;
 };

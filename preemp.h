@@ -37,7 +37,7 @@
 class PreEmp
 {
     public:
-        PreEmp(unsigned sampleRate);
+        PreEmp(uint16_t sampleRate);
         PreEmp(const PreEmp &source);
         PreEmp &operator=(const PreEmp &source);
         float filter(float value);

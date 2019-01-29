@@ -1,3 +1,4 @@
+
 /*
     fm_transmitter - use Raspberry Pi as FM transmitter
 
@@ -31,8 +32,8 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "wave_reader.h"
-#include "error_reporter.h"
+#include "wave_reader.hpp"
+#include "error_reporter.hpp"
 #include <sstream>
 #include <cstring>
 #include <unistd.h>
@@ -107,16 +108,16 @@ WaveReader::~WaveReader()
     }
 }
 
-vector<char> *WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool &continueFlag)
+vector<int8_t> *WaveReader::readData(uint32_t bytesToRead, bool headerBytes, bool &continueFlag)
 {
-    unsigned bytesRead = 0;
-    vector<char> *data = new vector<char>();
+    uint32_t bytesRead = 0;
+    vector<int8_t> *data = new vector<int8_t>();
     data->resize(bytesToRead);
 
     while ((bytesRead < bytesToRead) && continueFlag) {
         int bytes = read(fileDescriptor, &(*data)[bytesRead], bytesToRead - bytesRead);
         if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
-            (((unsigned)bytes < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
+            (((uint32_t)bytes < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
             delete data;
 
             ostringstream oss;
@@ -155,10 +156,10 @@ vector<char> *WaveReader::readData(unsigned bytesToRead, bool headerBytes, bool 
     return data;
 }
 
-vector<Sample> *WaveReader::getSamples(unsigned quantity, bool &continueFlag) {
-    unsigned bytesToRead, bytesLeft, bytesPerSample;
+vector<Sample> *WaveReader::getSamples(uint32_t quantity, bool &continueFlag) {
+    uint32_t bytesToRead, bytesLeft, bytesPerSample;
     vector<Sample> *samples = new vector<Sample>();
-    vector<char> *data;
+    vector<int8_t> *data;
 
     bytesPerSample = (header.bitsPerSample >> 3) * header.channels;
     bytesToRead = quantity * bytesPerSample;
@@ -182,7 +183,7 @@ vector<Sample> *WaveReader::getSamples(unsigned quantity, bool &continueFlag) {
         quantity = data->size() / bytesPerSample;
     }
 
-    for (unsigned i = 0; i < quantity; i++) {
+    for (uint32_t i = 0; i < quantity; i++) {
         samples->push_back(Sample(&(*data)[bytesPerSample * i], header.channels, header.bitsPerSample));
     }
 
@@ -190,7 +191,7 @@ vector<Sample> *WaveReader::getSamples(unsigned quantity, bool &continueFlag) {
     return samples;
 }
 
-bool WaveReader::setSampleOffset(unsigned offset) {
+bool WaveReader::setSampleOffset(uint32_t offset) {
     if (fileDescriptor != STDIN_FILENO) {
         currentDataOffset = offset * (header.bitsPerSample >> 3) * header.channels;
         if (lseek(fileDescriptor, dataOffset + currentDataOffset, SEEK_SET) == -1) {

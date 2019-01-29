@@ -37,7 +37,7 @@
 class Sample
 {
     public:
-        Sample(char *data, unsigned short channels, unsigned short bitsPerChannel);
+        Sample(int8_t *data, uint16_t channels, uint16_t bitsPerChannel);
         Sample(const Sample &source);
         Sample &operator=(const Sample &source);
         float getMonoValue();

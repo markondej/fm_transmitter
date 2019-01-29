@@ -34,8 +34,8 @@
 #ifndef WAVE_READER_H
 #define WAVE_READER_H
 
-#include "pcm_wave_header.h"
-#include "sample.h"
+#include "pcm_wave_header.hpp"
+#include "sample.hpp"
 #include <string>
 #include <vector>
 
@@ -49,16 +49,16 @@ class WaveReader
         virtual ~WaveReader();
         string getFilename();
         PCMWaveHeader getHeader();
-        vector<Sample> *getSamples(unsigned quantity, bool &continueFlag);
-        bool setSampleOffset(unsigned offset);
+        vector<Sample> *getSamples(uint32_t quantity, bool &continueFlag);
+        bool setSampleOffset(uint32_t offset);
     private:
-        vector<char> *readData(unsigned bytesToRead, bool headerBytes, bool &continueFlag);
+        vector<int8_t> *readData(uint32_t bytesToRead, bool headerBytes, bool &continueFlag);
         WaveReader(const WaveReader &source);
         WaveReader &operator=(const WaveReader &source);
 
         string filename;
         PCMWaveHeader header;
-        unsigned dataOffset, headerOffset, currentDataOffset;
+        uint32_t dataOffset, headerOffset, currentDataOffset;
         int fileDescriptor;
 };
 

@@ -33,7 +33,7 @@
 
 #include "preemp.h"
 
-PreEmp::PreEmp(unsigned sampleRate)
+PreEmp::PreEmp(uint32_t sampleRate)
     : timeConst(sampleRate * 75.0e-6), prevValue(0.0)
 {
 }
