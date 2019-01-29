@@ -31,8 +31,8 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SAMPLE_H
-#define SAMPLE_H
+#ifndef SAMPLE_HPP
+#define SAMPLE_HPP
 
 class Sample
 {
@@ -45,4 +45,4 @@ class Sample
         short value;
 };
 
-#endif // SAMPLE_H
+#endif // SAMPLE_HPP

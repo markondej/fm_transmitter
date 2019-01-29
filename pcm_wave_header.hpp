@@ -31,8 +31,8 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PCM_WAVE_HEADER_H
-#define PCM_WAVE_HEADER_H
+#ifndef PCM_WAVE_HEADER_HPP
+#define PCM_WAVE_HEADER_HPP
 
 #define WAVE_FORMAT_PCM 0x0001
 
@@ -53,4 +53,4 @@ struct PCMWaveHeader
     uint32_t subchunk2Size;
 };
 
-#endif // PCM_WAVE_HEADER
+#endif // PCM_WAVE_HEADER_HPP

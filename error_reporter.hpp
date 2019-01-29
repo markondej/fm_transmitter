@@ -31,8 +31,8 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef ERROR_REPORTER_H
-#define ERROR_REPORTER_H
+#ifndef ERROR_REPORTER_HPP
+#define ERROR_REPORTER_HPP
 
 #include <exception>
 #include <string>
@@ -51,4 +51,4 @@ class ErrorReporter : public exception
         string errorMessage;
 };
 
-#endif // ERROR_REPORTER_H
+#endif // ERROR_REPORTER_HPP

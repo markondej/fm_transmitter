@@ -31,8 +31,8 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PREEMP_H
-#define PREEMP_H
+#ifndef PREEMP_HPP
+#define PREEMP_HPP
 
 class PreEmp
 {
@@ -45,4 +45,4 @@ class PreEmp
         float timeConst, prevValue;
 };
 
-#endif // PREEMP_H
+#endif // PREEMP_HPP

@@ -31,8 +31,8 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef TRANSMITTER_H
-#define TRANSMITTER_H
+#ifndef TRANSMITTER_HPP
+#define TRANSMITTER_HPP
 
 #include "wave_reader.h"
 
@@ -63,4 +63,4 @@ class Transmitter
         int mBoxFd;
 };
 
-#endif // TRANSMITTER_H
+#endif // TRANSMITTER_HPP

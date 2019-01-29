@@ -31,8 +31,8 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef WAVE_READER_H
-#define WAVE_READER_H
+#ifndef WAVE_READER_HPP
+#define WAVE_READER_HPP
 
 #include "pcm_wave_header.hpp"
 #include "sample.hpp"
@@ -62,4 +62,4 @@ class WaveReader
         int fileDescriptor;
 };
 
-#endif // WAVE_READER_H
+#endif // WAVE_READER_HPP
