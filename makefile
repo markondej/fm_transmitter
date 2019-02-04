@@ -1,8 +1,6 @@
 EXECUTABLE = fm_transmitter
 VERSION = 0.9.1
-
 FLAGS = -Wall -O3
-LIBS = -lm
 
 all: main.o mailbox.o error_reporter.o sample.o preemp.o wave_reader.o transmitter.o
 	g++ -L/opt/vc/lib -lm -lpthread -lbcm_host -o $(EXECUTABLE) main.o mailbox.o sample.o preemp.o error_reporter.o wave_reader.o transmitter.o
