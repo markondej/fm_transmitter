@@ -250,7 +250,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
         pwm->ctl = (0x01 << 5) | (0x01 << 2) | 0x01;
 
         float value;
-        unsigned i, cbIndex = 0;
+        unsigned i, cbOffset = 0;
 #ifndef NO_PREEMP
         PreEmp preEmp(header.sampleRate);
 #endif
@@ -264,21 +264,21 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             value = preEmp.filter(value);
 #endif
             clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
-            dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x01 << 3);
-            dmaCb[cbIndex].srcAddress = getMemoryAddress(&clkDiv[i]);
-            dmaCb[cbIndex].dstAddress = getPeripheralAddress(&clk0->div);
-            dmaCb[cbIndex].transferLen = sizeof(unsigned);
-            dmaCb[cbIndex].stride = 0;
-            dmaCb[cbIndex].nextCbAddress = getMemoryAddress(&dmaCb[cbIndex + 1]);
-            cbIndex++;
+            dmaCb[cbOffset].transferInfo = (0x01 << 26) | (0x01 << 3);
+            dmaCb[cbOffset].srcAddress = getMemoryAddress(&clkDiv[i]);
+            dmaCb[cbOffset].dstAddress = getPeripheralAddress(&clk0->div);
+            dmaCb[cbOffset].transferLen = sizeof(unsigned);
+            dmaCb[cbOffset].stride = 0;
+            dmaCb[cbOffset].nextCbAddress = getMemoryAddress(&dmaCb[cbOffset + 1]);
+            cbOffset++;
 
-            dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x05 << 16) | (0x01 << 6) | (0x01 << 3);
-            dmaCb[cbIndex].srcAddress = getMemoryAddress(pwmFifoData);
-            dmaCb[cbIndex].dstAddress = getPeripheralAddress(&pwm->fifoIn);
-            dmaCb[cbIndex].transferLen = sizeof(unsigned) * PWM_WRITES_PER_SAMPLE;
-            dmaCb[cbIndex].stride = 0;
-            dmaCb[cbIndex].nextCbAddress = getMemoryAddress((i < bufferSize - 1) ? &dmaCb[cbIndex + 1] : dmaCb);
-            cbIndex++;
+            dmaCb[cbOffset].transferInfo = (0x01 << 26) | (0x05 << 16) | (0x01 << 6) | (0x01 << 3);
+            dmaCb[cbOffset].srcAddress = getMemoryAddress(pwmFifoData);
+            dmaCb[cbOffset].dstAddress = getPeripheralAddress(&pwm->fifoIn);
+            dmaCb[cbOffset].transferLen = sizeof(unsigned) * PWM_WRITES_PER_SAMPLE;
+            dmaCb[cbOffset].stride = 0;
+            dmaCb[cbOffset].nextCbAddress = getMemoryAddress((i < bufferSize - 1) ? &dmaCb[cbOffset + 1] : dmaCb);
+            cbOffset++;
         }
         *pwmFifoData = 0x00;        
         delete samples;
@@ -299,7 +299,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
                     break;
                 }
                 eof = samples->size() < bufferSize;
-                cbIndex = 0;
+                cbOffset = 0;
                 for (i = 0; i < samples->size(); i++) {
                     value = (*samples)[i].getMonoValue();
 #ifndef NO_PREEMP
@@ -309,7 +309,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
                         usleep(1);
                     }
                     clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
-                    cbIndex += 2;
+                    cbOffset += 2;
                 }
                delete samples;
             }
@@ -319,8 +319,8 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             isError = true;
         }
 
-        cbIndex -= 2;
-        dmaCb[cbIndex].nextCbAddress = 0x00;
+        cbOffset -= 2;
+        dmaCb[cbOffset].nextCbAddress = 0x00;
         while (dma->cbAddress != 0x00) {
             usleep(1);
         }
