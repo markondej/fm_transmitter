@@ -31,18 +31,24 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SAMPLE_H
-#define SAMPLE_H
+#ifndef ERROR_REPORTER_HPP
+#define ERROR_REPORTER_HPP
 
-class Sample
+#include <exception>
+#include <string>
+
+using std::exception;
+using std::string;
+
+class ErrorReporter : public exception
 {
     public:
-        Sample(char *data, unsigned short channels, unsigned short bitsPerChannel);
-        Sample(const Sample &source);
-        Sample &operator=(const Sample &source);
-        float getMonoValue();
+        explicit ErrorReporter(string message);
+        virtual ~ErrorReporter() throw();
+
+        virtual const char *what() const throw();
     protected:
-        short value;
+        string errorMessage;
 };
 
-#endif // SAMPLE_H
+#endif // ERROR_REPORTER_HPP

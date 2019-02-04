@@ -31,9 +31,9 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "transmitter.h"
-#include "preemp.h"
-#include "error_reporter.h"
+#include "transmitter.hpp"
+#include "preemp.hpp"
+#include "error_reporter.hpp"
 #include "mailbox.h"
 #include <bcm_host.h>
 #include <sstream>
@@ -63,54 +63,54 @@ using std::vector;
 #define PWM_CHANNEL_RANGE 32
 
 struct TimerRegisters {
-    unsigned ctlStatus;
-    unsigned low;
-    unsigned high;
-    unsigned c0;
-    unsigned c1;
-    unsigned c2;
-    unsigned c3;
+    uint32_t ctlStatus;
+    uint32_t low;
+    uint32_t high;
+    uint32_t c0;
+    uint32_t c1;
+    uint32_t c2;
+    uint32_t c3;
 };
 
 struct ClockRegisters {
-    unsigned ctl;
-    unsigned div;
+    uint32_t ctl;
+    uint32_t div;
 };
 
 struct PWMRegisters {
-    unsigned ctl;
-    unsigned status;
-    unsigned dmaConf;
-    unsigned reserved0;
-    unsigned chn1Range;
-    unsigned chn1Data;
-    unsigned fifoIn;
-    unsigned reserved1;
-    unsigned chn2Range;
-    unsigned chn2Data;
+    uint32_t ctl;
+    uint32_t status;
+    uint32_t dmaConf;
+    uint32_t reserved0;
+    uint32_t chn1Range;
+    uint32_t chn1Data;
+    uint32_t fifoIn;
+    uint32_t reserved1;
+    uint32_t chn2Range;
+    uint32_t chn2Data;
 };
 
 struct DMAControllBlock {
-    unsigned transferInfo;
-    unsigned srcAddress;
-    unsigned dstAddress;
-    unsigned transferLen;
-    unsigned stride;
-    unsigned nextCbAddress;
-    unsigned reserved0;
-    unsigned reserved1;
+    uint32_t transferInfo;
+    uint32_t srcAddress;
+    uint32_t dstAddress;
+    uint32_t transferLen;
+    uint32_t stride;
+    uint32_t nextCbAddress;
+    uint32_t reserved0;
+    uint32_t reserved1;
 };
 
 struct DMARegisters {
-    unsigned ctlStatus;
-    unsigned cbAddress;
-    unsigned transferInfo;
-    unsigned srcAddress;
-    unsigned dstAddress;
-    unsigned transferLen;
-    unsigned stride;
-    unsigned nextCbAddress;
-    unsigned debug;
+    uint32_t ctlStatus;
+    uint32_t cbAddress;
+    uint32_t transferInfo;
+    uint32_t srcAddress;
+    uint32_t dstAddress;
+    uint32_t transferLen;
+    uint32_t stride;
+    uint32_t nextCbAddress;
+    uint32_t debug;
 };
 
 bool Transmitter::transmitting = false;
@@ -144,7 +144,7 @@ Transmitter &Transmitter::getInstance()
     return instance;
 }
 
-bool Transmitter::allocateMemory(unsigned size)
+bool Transmitter::allocateMemory(uint32_t size)
 {
     if (memSize) {
         return false;
@@ -175,20 +175,20 @@ void Transmitter::freeMemory()
     memSize = 0;
 }
 
-unsigned Transmitter::getMemoryAddress(volatile void *object)
+uint32_t Transmitter::getMemoryAddress(volatile void *object)
 {
-    return (memSize) ? memAddress + ((unsigned)object - (unsigned)memAllocated) : 0x00000000;
+    return (memSize) ? memAddress + ((uint32_t)object - (uint32_t)memAllocated) : 0x00000000;
 }
 
-unsigned Transmitter::getPeripheralAddress(volatile void *object) {
-    return PERIPHERALS_PHYS_BASE + ((unsigned)object - (unsigned)peripherals);
+uint32_t Transmitter::getPeripheralAddress(volatile void *object) {
+    return PERIPHERALS_PHYS_BASE + ((uint32_t)object - (uint32_t)peripherals);
 }
 
-void *Transmitter::getPeripheral(unsigned offset) {
-    return (void *)((unsigned)peripherals + offset);
+void *Transmitter::getPeripheral(uint32_t offset) {
+    return (void *)((uint32_t)peripherals + offset);
 }
 
-void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, unsigned char dmaChannel, bool preserveCarrierOnExit)
+void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, uint8_t dmaChannel, bool preserveCarrierOnExit)
 {
     if (transmitting) {
         throw ErrorReporter("Cannot play, transmitter already in use");
@@ -198,15 +198,15 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
     preserveCarrier = preserveCarrierOnExit;
 
     PCMWaveHeader header = reader.getHeader();
-    unsigned bufferSize = (unsigned)((unsigned long long)header.sampleRate * BUFFER_TIME / 1000000);
+    uint32_t bufferSize = (uint32_t)((uint64_t)header.sampleRate * BUFFER_TIME / 1000000);
     vector<Sample> *samples = reader.getSamples(bufferSize, transmitting);
     if (samples == NULL) {
         return;
     }
     bool eof = samples->size() < bufferSize;
 
-    unsigned clockDivisor = (unsigned)round((500 << 12) / frequency);
-    unsigned divisorRange = clockDivisor - (unsigned)round((500 << 12) / (frequency + 0.0005 * bandwidth));
+    uint32_t clockDivisor = (uint32_t)round((500 << 12) / frequency);
+    uint32_t divisorRange = clockDivisor - (uint32_t)round((500 << 12) / (frequency + 0.0005 * bandwidth));
     bool isError = false;
     string errorMessage;
 
@@ -216,13 +216,13 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             throw ErrorReporter("DMA channel number out of range (0 - 15)");
         }
 
-        if (!allocateMemory(sizeof(unsigned) * (bufferSize + 1) + sizeof(DMAControllBlock) * (2 * bufferSize))) {
+        if (!allocateMemory(sizeof(uint32_t) * (bufferSize) + 1) + sizeof(DMAControllBlock) * (2 * bufferSize))) {
             delete samples;
             throw ErrorReporter("Cannot allocate memory");
         }
 
         volatile ClockRegisters *clk0 = (ClockRegisters *)getPeripheral(CLK0_BASE_OFFSET);
-        volatile unsigned *gpio = (unsigned *)getPeripheral(GPIO_BASE_OFFSET);
+        volatile uint32_t *gpio = (uint32_t *)getPeripheral(GPIO_BASE_OFFSET);
         if (!clockInitialized) {
             clk0->ctl = (0x5A << 24) | 0x06;
             usleep(1000);
@@ -236,7 +236,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
         float pwmClkFreq = PWM_WRITES_PER_SAMPLE * PWM_CHANNEL_RANGE * header.sampleRate / 1000000;
         pwmClk->ctl = (0x5A << 24) | 0x06;
         usleep(1000);
-        pwmClk->div = (0x5A << 24) | (unsigned)((500 << 12) / pwmClkFreq);
+        pwmClk->div = (0x5A << 24) | (uint32_t)((500 << 12) / pwmClkFreq);
         pwmClk->ctl = (0x5A << 24) | (0x01 << 4) | 0x06;
 
         volatile PWMRegisters *pwm = (PWMRegisters *)getPeripheral(PWM_BASE_OFFSET);
@@ -250,24 +250,24 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
         pwm->ctl = (0x01 << 5) | (0x01 << 2) | 0x01;
 
         float value;
-        unsigned i, cbIndex = 0;
+        uint32_t i, cbIndex = 0;
 #ifndef NO_PREEMP
         PreEmp preEmp(header.sampleRate);
 #endif
 
         volatile DMAControllBlock *dmaCb = (DMAControllBlock *)memAllocated;
-        volatile unsigned *clkDiv = (unsigned *)((unsigned)dmaCb + 2 * sizeof(DMAControllBlock) * bufferSize);
-        volatile unsigned *pwmFifoData = (unsigned *)((unsigned)clkDiv + sizeof(unsigned) * bufferSize);
+        volatile unsigned *clkDiv = (uint32_t *)((uint32_t)dmaCb + 2 * sizeof(DMAControllBlock) * bufferSize);
+        volatile unsigned *pwmFifoData = (uint32_t *)((uint32_t)clkDiv + sizeof(uint32_t) * bufferSize);
         for (i = 0; i < bufferSize; i++) {
             value = (*samples)[i].getMonoValue();
 #ifndef NO_PREEMP
             value = preEmp.filter(value);
 #endif
-            clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
+            clkDiv[i] = (0x5A << 24) | (clockDivisor - (int32_t)round(value * divisorRange));
             dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x01 << 3);
             dmaCb[cbIndex].srcAddress = getMemoryAddress(&clkDiv[i]);
             dmaCb[cbIndex].dstAddress = getPeripheralAddress(&clk0->div);
-            dmaCb[cbIndex].transferLen = sizeof(unsigned);
+            dmaCb[cbIndex].transferLen = sizeof(uint32_t);
             dmaCb[cbIndex].stride = 0;
             dmaCb[cbIndex].nextCbAddress = getMemoryAddress(&dmaCb[cbIndex + 1]);
             cbIndex++;
@@ -275,7 +275,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             dmaCb[cbIndex].transferInfo = (0x01 << 26) | (0x05 << 16) | (0x01 << 6) | (0x01 << 3);
             dmaCb[cbIndex].srcAddress = getMemoryAddress(pwmFifoData);
             dmaCb[cbIndex].dstAddress = getPeripheralAddress(&pwm->fifoIn);
-            dmaCb[cbIndex].transferLen = sizeof(unsigned) * PWM_WRITES_PER_SAMPLE;
+            dmaCb[cbIndex].transferLen = sizeof(uint32_t) * PWM_WRITES_PER_SAMPLE;
             dmaCb[cbIndex].stride = 0;
             dmaCb[cbIndex].nextCbAddress = getMemoryAddress((i < bufferSize - 1) ? &dmaCb[cbIndex + 1] : dmaCb);
             cbIndex++;
@@ -308,7 +308,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
                     while (i == ((dma->cbAddress - getMemoryAddress(dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
                         usleep(1);
                     }
-                    clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
+                    clkDiv[i] = (0x5A << 24) | (clockDivisor - (int32_t)round(value * divisorRange));
                     cbIndex += 2;
                 }
                delete samples;
@@ -335,7 +335,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             clk0->ctl = (0x5A << 24) | 0x06;
         }
     } else {
-        unsigned sampleOffset = 0;
+        uint32_t sampleOffset = 0;
         vector<Sample> *buffer = samples;
 
         void *transmitterParams[5] = {
@@ -392,14 +392,14 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
 void *Transmitter::transmit(void *params)
 {
     vector<Sample> **buffer = (vector<Sample> **)((void **)params)[0];
-    unsigned *sampleOffset = (unsigned *)((void **)params)[1];
-    unsigned *clockDivisor = (unsigned *)((void **)params)[2];
-    unsigned *divisorRange = (unsigned *)((void **)params)[3];
-    unsigned *sampleRate = (unsigned *)((void **)params)[4];
+    uint32_t *sampleOffset = (uint32_t *)((void **)params)[1];
+    uint32_t *clockDivisor = (uint32_t *)((void **)params)[2];
+    uint32_t *divisorRange = (uint32_t *)((void **)params)[3];
+    uint32_t *sampleRate = (uint32_t *)((void **)params)[4];
 
-    unsigned offset, length, prevOffset;
+    uint32_t offset, length, prevOffset;
     vector<Sample> *samples = NULL;
-    unsigned long long start;
+    uint64_t start;
     float value;
 
 #ifndef NO_PREEMP
@@ -407,7 +407,7 @@ void *Transmitter::transmit(void *params)
 #endif
 
     volatile ClockRegisters *clk0 = (ClockRegisters *)getPeripheral(CLK0_BASE_OFFSET);
-    volatile unsigned *gpio = (unsigned *)getPeripheral(GPIO_BASE_OFFSET);
+    volatile uint32_t *gpio = (uint32_t *)getPeripheral(GPIO_BASE_OFFSET);
     if (!clockInitialized) {
         clk0->ctl = (0x5A << 24) | 0x06;
         usleep(1000);
@@ -418,15 +418,15 @@ void *Transmitter::transmit(void *params)
     }
 
     volatile TimerRegisters *timer = (TimerRegisters *)getPeripheral(TIMER_BASE_OFFSET);
-    unsigned long long current = *(unsigned long long *)&timer->low;
-    unsigned long long playbackStart = current;
+    uint64_t current = *(uint64_t *)&timer->low;
+    uint64_t playbackStart = current;
 
     while (transmitting) {
         start = current;
 
         while ((*buffer == NULL) && transmitting) {
             usleep(1);
-            current = *(unsigned long long *)&timer->low;
+            current = *(uint64_t *)&timer->low;
         }
         if (!transmitting) {
             break;
@@ -448,10 +448,10 @@ void *Transmitter::transmit(void *params)
 #ifndef NO_PREEMP
             value = preEmp.filter(value);
 #endif
-            clk0->div = (0x5A << 24) | (*clockDivisor - (int)round(value * (*divisorRange)));
+            clk0->div = (0x5A << 24) | (*clockDivisor - (int32_t)round(value * (*divisorRange)));
             while (offset == prevOffset) {
                 usleep(1); // asm("nop"); 
-                current = *(unsigned long long *)&timer->low;
+                current = *(uint64_t *)&timer->low;
                 offset = (current - start) * (*sampleRate) / 1000000;
             }
         }

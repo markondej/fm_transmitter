@@ -31,19 +31,19 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "sample.h"
+#include "sample.hpp"
 
-Sample::Sample(char *data, unsigned short channels, unsigned short bitsPerChannel)
+Sample::Sample(int8_t *data, uint16_t channels, uint16_t bitsPerChannel)
     : value(0)
 {
-    int sum = 0;
-    short *channelValues = new short[channels];
-    short multiplier = bitsPerChannel >> 3;
-    for (unsigned i = 0; i < channels; i++) {
+    uint32_t sum = 0;
+    int16_t *channelValues = new int16_t[channels];
+    int16_t multiplier = bitsPerChannel >> 3;
+    for (uint16_t i = 0; i < channels; i++) {
         if (multiplier > 1) {
             channelValues[i] = (data[(i + 1) * multiplier - 1] << 8) | data[(i + 1) * multiplier - 2];
         } else {
-            channelValues[i] = ((short)(unsigned char)data[i] - 0x80) << 8;
+            channelValues[i] = ((int16_t)(uint8_t)data[i] - 0x80) << 8;
         }
         sum += channelValues[i];
     }

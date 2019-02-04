@@ -31,18 +31,18 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PREEMP_H
-#define PREEMP_H
+#ifndef SAMPLE_HPP
+#define SAMPLE_HPP
 
-class PreEmp
+class Sample
 {
     public:
-        PreEmp(unsigned sampleRate);
-        PreEmp(const PreEmp &source);
-        PreEmp &operator=(const PreEmp &source);
-        float filter(float value);
+        Sample(int8_t *data, uint16_t channels, uint16_t bitsPerChannel);
+        Sample(const Sample &source);
+        Sample &operator=(const Sample &source);
+        float getMonoValue();
     protected:
-        float timeConst, prevValue;
+        short value;
 };
 
-#endif // PREEMP_H
+#endif // SAMPLE_HPP

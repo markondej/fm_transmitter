@@ -31,7 +31,7 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "transmitter.h"
+#include "transmitter.hpp"
 #include <cstdlib>
 #include <csignal>
 #include <iostream>
@@ -53,13 +53,12 @@ void sigIntHandler(int sigNum)
 
 int main(int argc, char** argv)
 {
+    string filename;
     double frequency = 100.0;
     double bandwidth = 100.0;
-    unsigned short dmaChannel = 0;
-    bool loop = false;
-    string filename;
-    bool showUsage = true;
-    int opt, filesOffset;
+    uint8_t filesOffset, dmaChannel = 0;
+    bool showUsage = true, loop = false;
+    int opt;
 
     while ((opt = getopt(argc, argv, "rf:d:b:v")) != -1) {
         switch (opt) {
@@ -70,7 +69,7 @@ int main(int argc, char** argv)
                 frequency = ::atof(optarg);
                 break;
             case 'd':
-                dmaChannel = ::atof(optarg);
+                dmaChannel = (uint8_t)::atof(optarg);
                 break;
             case 'b':
                 bandwidth = ::atof(optarg);
@@ -81,7 +80,7 @@ int main(int argc, char** argv)
         }
     }
     if (optind < argc) {
-        filesOffset = optind;
+        filesOffset = (uint8_t)optind;
         showUsage = false;
     }
     if (showUsage) {
@@ -97,7 +96,7 @@ int main(int argc, char** argv)
         do {
             filename = argv[optind++];
             if ((optind == argc) && loop) {
-                optind = filesOffset;
+                optind = (int)filesOffset;
             }
             WaveReader reader(filename != "-" ? filename : string(), play);
             PCMWaveHeader header = reader.getHeader();
