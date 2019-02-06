@@ -280,7 +280,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             dmaCb[cbOffset].nextCbAddress = getMemoryAddress((i < bufferSize - 1) ? &dmaCb[cbOffset + 1] : dmaCb);
             cbOffset++;
         }
-        *pwmFifoData = 0x00;        
+        *pwmFifoData = 0x00;
         delete samples;
 
         volatile DMARegisters *dma = (DMARegisters *)getPeripheral((dmaChannel < 15) ? DMA0_BASE_OFFSET + dmaChannel * 0x100 : DMA15_BASE_OFFSET);
@@ -306,7 +306,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
                     value = preEmp.filter(value);
 #endif
                     while (i == ((dma->cbAddress - getMemoryAddress(dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
-                        usleep(1);
+                        usleep(1000);
                     }
                     clkDiv[i] = (0x5A << 24) | (clockDivisor - (int)round(value * divisorRange));
                     cbOffset += 2;
@@ -322,7 +322,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
         cbOffset -= 2;
         dmaCb[cbOffset].nextCbAddress = 0x00;
         while (dma->cbAddress != 0x00) {
-            usleep(1);
+            usleep(1000);
         }
 
         dma->ctlStatus = (0x01 << 31);
