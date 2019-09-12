@@ -46,6 +46,7 @@ using std::vector;
 
 #define PERIPHERALS_PHYS_BASE 0x7E000000
 #define BCM2835_PERI_VIRT_BASE 0x20000000
+#define BCM2838_PERI_VIRT_BASE 0xFE000000
 #define DMA0_BASE_OFFSET 0x00007000
 #define DMA15_BASE_OFFSET 0x00E05000
 #define CLK0_BASE_OFFSET 0x00101070
@@ -54,13 +55,16 @@ using std::vector;
 #define PWM_BASE_OFFSET 0x0020C000
 #define TIMER_BASE_OFFSET 0x00003000
 
-#define BCM2837_MEM_FLAG 0x04
 #define BCM2835_MEM_FLAG 0x0C
-#define PAGE_SIZE 4096
+#define BCM2838_MEM_FLAG 0x04
+
+#define BCM2835_PLLD_FREQ 500
+#define BCM2838_PLLD_FREQ 750
 
 #define BUFFER_TIME 1000000
 #define PWM_WRITES_PER_SAMPLE 10
 #define PWM_CHANNEL_RANGE 32
+#define PAGE_SIZE 4096
 
 struct TimerRegisters {
     unsigned ctlStatus;
@@ -126,7 +130,7 @@ Transmitter::Transmitter()
         throw ErrorReporter("Cannot open /dev/mem (permission denied)");
     }
 
-    peripherals = mmap(NULL, bcm_host_get_peripheral_size(), PROT_READ | PROT_WRITE, MAP_SHARED, memFd, bcm_host_get_peripheral_address());
+    peripherals = mmap(NULL, getPeripheralSize(), PROT_READ | PROT_WRITE, MAP_SHARED, memFd, getPeripheralVirtAddress());
     close(memFd);
     if (peripherals == MAP_FAILED) {
         throw ErrorReporter("Cannot obtain access to peripherals (mmap error)");
@@ -135,7 +139,7 @@ Transmitter::Transmitter()
 
 Transmitter::~Transmitter()
 {
-    munmap(peripherals, bcm_host_get_peripheral_size());
+    munmap(peripherals, getPeripheralSize());
 }
 
 Transmitter &Transmitter::getInstance()
@@ -154,7 +158,7 @@ bool Transmitter::allocateMemory(unsigned size)
     if (memSize % PAGE_SIZE) {
         memSize = (memSize / PAGE_SIZE + 1) * PAGE_SIZE;
     }
-    memHandle = mem_alloc(mBoxFd, size, PAGE_SIZE, (bcm_host_get_peripheral_address() == BCM2835_PERI_VIRT_BASE) ? BCM2835_MEM_FLAG : BCM2837_MEM_FLAG);
+    memHandle = mem_alloc(mBoxFd, size, PAGE_SIZE, (getPeripheralVirtAddress() == BCM2835_PERI_VIRT_BASE) ? BCM2835_MEM_FLAG : BCM2838_MEM_FLAG);
     if (!memHandle) {
         mbox_close(mBoxFd);
         memSize = 0;
@@ -173,6 +177,25 @@ void Transmitter::freeMemory()
 
     mbox_close(mBoxFd);
     memSize = 0;
+}
+
+unsigned Transmitter::getPeripheralVirtAddress()
+{
+    return (bcm_host_get_peripheral_size() == BCM2838_PERI_VIRT_BASE) ? BCM2838_PERI_VIRT_BASE : bcm_host_get_peripheral_address();
+}
+
+unsigned Transmitter::getPeripheralSize()
+{
+    unsigned size = bcm_host_get_peripheral_size();
+    if (size == BCM2838_PERI_VIRT_BASE) {
+        size = 0x01000000;
+    }
+    return size;
+}
+
+float Transmitter::getSrcClkFreq()
+{
+    return (getPeripheralVirtAddress() == BCM2838_PERI_VIRT_BASE) ? BCM2838_PLLD_FREQ : BCM2835_PLLD_FREQ;
 }
 
 unsigned Transmitter::getMemoryAddress(volatile void *object)
@@ -205,8 +228,8 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
     }
     bool eof = samples->size() < bufferSize;
 
-    unsigned clockDivisor = (unsigned)round((500 << 12) / frequency);
-    unsigned divisorRange = clockDivisor - (unsigned)round((500 << 12) / (frequency + 0.0005 * bandwidth));
+    unsigned clockDivisor = (unsigned)round(getSrcClkFreq() * (0x01 << 12) / frequency);
+    unsigned divisorRange = clockDivisor - (unsigned)round(getSrcClkFreq() * (0x01 << 12) / (frequency + 0.0005 * bandwidth));
     bool isError = false;
     string errorMessage;
 
@@ -236,7 +259,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
         float pwmClkFreq = PWM_WRITES_PER_SAMPLE * PWM_CHANNEL_RANGE * header.sampleRate / 1000000;
         pwmClk->ctl = (0x5A << 24) | 0x06;
         usleep(1000);
-        pwmClk->div = (0x5A << 24) | (unsigned)((500 << 12) / pwmClkFreq);
+        pwmClk->div = (0x5A << 24) | (unsigned)(getSrcClkFreq() * (0x01 << 12) / pwmClkFreq);
         pwmClk->ctl = (0x5A << 24) | (0x01 << 4) | 0x06;
 
         volatile PWMRegisters *pwm = (PWMRegisters *)getPeripheral(PWM_BASE_OFFSET);

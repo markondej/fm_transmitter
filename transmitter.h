@@ -51,6 +51,9 @@ class Transmitter
         Transmitter &operator=(const Transmitter &source);
         bool allocateMemory(unsigned size);
         void freeMemory();
+        float getSrcClkFreq();
+        unsigned getPeripheralVirtAddress();
+        unsigned getPeripheralSize();		
         unsigned getMemoryAddress(volatile void *object);
         unsigned getPeripheralAddress(volatile void *object);
         static void *getPeripheral(unsigned offset);
