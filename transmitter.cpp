@@ -46,6 +46,7 @@ using std::vector;
 
 #define PERIPHERALS_PHYS_BASE 0x7E000000
 #define BCM2835_PERI_VIRT_BASE 0x20000000
+#define BCM2838_PERI_VIRT_BASE 0xFE000000
 #define DMA0_BASE_OFFSET 0x00007000
 #define DMA15_BASE_OFFSET 0x00E05000
 #define CLK0_BASE_OFFSET 0x00101070
@@ -126,7 +127,7 @@ Transmitter::Transmitter()
         throw ErrorReporter("Cannot open /dev/mem (permission denied)");
     }
 
-    peripherals = mmap(NULL, bcm_host_get_peripheral_size(), PROT_READ | PROT_WRITE, MAP_SHARED, memFd, bcm_host_get_peripheral_address());
+    peripherals = mmap(NULL, getPeripheralSize(), PROT_READ | PROT_WRITE, MAP_SHARED, memFd, getPeripheralVirtAddress());
     close(memFd);
     if (peripherals == MAP_FAILED) {
         throw ErrorReporter("Cannot obtain access to peripherals (mmap error)");
@@ -135,7 +136,7 @@ Transmitter::Transmitter()
 
 Transmitter::~Transmitter()
 {
-    munmap(peripherals, bcm_host_get_peripheral_size());
+    munmap(peripherals, getPeripheralSize());
 }
 
 Transmitter &Transmitter::getInstance()
@@ -154,7 +155,7 @@ bool Transmitter::allocateMemory(unsigned size)
     if (memSize % PAGE_SIZE) {
         memSize = (memSize / PAGE_SIZE + 1) * PAGE_SIZE;
     }
-    memHandle = mem_alloc(mBoxFd, size, PAGE_SIZE, (bcm_host_get_peripheral_address() == BCM2835_PERI_VIRT_BASE) ? BCM2835_MEM_FLAG : BCM2837_MEM_FLAG);
+    memHandle = mem_alloc(mBoxFd, size, PAGE_SIZE, (getPeripheralVirtAddress() == BCM2835_PERI_VIRT_BASE) ? BCM2835_MEM_FLAG : BCM2837_MEM_FLAG);
     if (!memHandle) {
         mbox_close(mBoxFd);
         memSize = 0;
@@ -173,6 +174,20 @@ void Transmitter::freeMemory()
 
     mbox_close(mBoxFd);
     memSize = 0;
+}
+
+unsigned Transmitter::getPeripheralVirtAddress()
+{
+    return (bcm_host_get_peripheral_size() == BCM2838_PERI_VIRT_BASE) ? BCM2838_PERI_VIRT_BASE : bcm_host_get_peripheral_address();
+}
+
+unsigned Transmitter::getPeripheralSize()
+{
+    unsigned size = bcm_host_get_peripheral_size();
+    if (size == BCM2838_PERI_VIRT_BASE) {
+        size = 0x01000000;
+    }
+    return size;
 }
 
 unsigned Transmitter::getMemoryAddress(volatile void *object)
