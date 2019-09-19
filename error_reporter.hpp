@@ -31,18 +31,22 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PREEMP_H
-#define PREEMP_H
+#ifndef ERROR_REPORTER_HPP
+#define ERROR_REPORTER_HPP
 
-class PreEmp
+#include <exception>
+#include <string>
+
+class ErrorReporter : public std::exception
 {
     public:
-        PreEmp(unsigned sampleRate);
-        PreEmp(const PreEmp &source);
-        PreEmp &operator=(const PreEmp &source);
-        float filter(float value);
+        ErrorReporter();
+        ErrorReporter(std::string message);
+        virtual ~ErrorReporter() throw();
+
+        virtual const char *what() const throw();
     protected:
-        float timeConst, prevValue;
+        std::string errorMessage;
 };
 
-#endif // PREEMP_H
+#endif // ERROR_REPORTER_HPP
