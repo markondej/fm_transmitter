@@ -31,28 +31,28 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "preemp.h"
+#ifndef PCM_WAVE_HEADER_HPP
+#define PCM_WAVE_HEADER_HPP
 
-PreEmp::PreEmp(unsigned sampleRate)
-    : timeConst(sampleRate * 75.0e-6), prevValue(0.0)
-{
-}
+#include <cstdint>
 
-PreEmp::PreEmp(const PreEmp &source)
-    : timeConst(source.timeConst), prevValue(source.prevValue)
-{
-}
+#define WAVE_FORMAT_PCM 0x0001
 
-PreEmp &PreEmp::operator=(const PreEmp &source)
+struct PCMWaveHeader
 {
-    timeConst = source.timeConst;
-    prevValue = source.prevValue;
-    return *this;
-}
+    int8_t chunkID[4];
+    uint32_t chunkSize;
+    int8_t format[4];
+    int8_t subchunk1ID[4];
+    uint32_t subchunk1Size;
+    uint16_t audioFormat;
+    uint16_t channels;
+    uint32_t sampleRate;
+    uint32_t byteRate;
+    uint16_t blockAlign;
+    uint16_t bitsPerSample;
+    int8_t subchunk2ID[4];
+    uint32_t subchunk2Size;
+};
 
-float PreEmp::filter(float value)
-{
-    prevValue = value;
-    value = value + (prevValue - value) / (1.0 - timeConst);
-    return value;
-}
+#endif // PCM_WAVE_HEADER_HPP

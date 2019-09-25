@@ -31,24 +31,32 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef ERROR_REPORTER_H
-#define ERROR_REPORTER_H
+#ifndef WAVE_READER_HPP
+#define WAVE_READER_HPP
 
-#include <exception>
+#include "pcm_wave_header.hpp"
+#include "sample.hpp"
 #include <string>
+#include <vector>
 
-using std::exception;
-using std::string;
-
-class ErrorReporter : public exception
+class WaveReader
 {
     public:
-        explicit ErrorReporter(string message);
-        virtual ~ErrorReporter() throw();
+        WaveReader(std::string filename, bool &continueFlag);
+        virtual ~WaveReader();
+        WaveReader(const WaveReader &source) = delete;
+        WaveReader &operator=(const WaveReader &source) = delete;
+        std::string getFilename();
+        PCMWaveHeader getHeader();
+        std::vector<Sample> *getSamples(uint32_t quantity, bool &continueFlag);
+        bool setSampleOffset(uint32_t offset);
+    private:
+        std::vector<uint8_t> *readData(uint32_t bytesToRead, bool headerBytes, bool &continueFlag);
 
-        virtual const char *what() const throw();
-    protected:
-        string errorMessage;
+        std::string filename;
+        PCMWaveHeader header;
+        uint32_t dataOffset, headerOffset, currentDataOffset;
+        int fileDescriptor;
 };
 
-#endif // ERROR_REPORTER_H
+#endif // WAVE_READER_HPP

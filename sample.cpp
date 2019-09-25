@@ -31,38 +31,42 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "sample.h"
+#include "sample.hpp"
+#include <climits>
 
-Sample::Sample(char *data, unsigned short channels, unsigned short bitsPerChannel)
-    : value(0)
+Sample::Sample(uint8_t *data, uint16_t channels, uint16_t bitsPerChannel)
+    : value(0.)
 {
-    int sum = 0;
-    short *channelValues = new short[channels];
-    short multiplier = bitsPerChannel >> 3;
-    for (unsigned i = 0; i < channels; i++) {
+    int32_t sum = 0;
+    int16_t *channelValues = new int16_t[channels];
+    int16_t multiplier = bitsPerChannel >> 3;
+    for (uint32_t i = 0; i < channels; i++) {
         if (multiplier > 1) {
             channelValues[i] = (data[(i + 1) * multiplier - 1] << 8) | data[(i + 1) * multiplier - 2];
         } else {
-            channelValues[i] = ((short)(unsigned char)data[i] - 0x80) << 8;
+            channelValues[i] = ((int16_t)data[i] - 0x80) << 8;
         }
         sum += channelValues[i];
     }
-    value = sum / channels;
+    value = 2 * (sum / channels) / (double)USHRT_MAX;
     delete[] channelValues;
 }
 
-Sample::Sample(const Sample &source)
-    : value(source.value)
+double Sample::getMonoValue()
+{
+    return value;
+}
+
+#ifndef NO_PREEMP
+PreEmphasis::PreEmphasis(uint32_t sampleRate)
+    : timeConst(sampleRate * 75.0e-6), prevValue(0.0)
 {
 }
 
-Sample &Sample::operator=(const Sample &source)
+double PreEmphasis::filter(double value)
 {
-    value = source.value;
-    return *this;
+    prevValue = value;
+    value = value + (prevValue - value) / (1.0 - timeConst);
+    return value;
 }
-
-float Sample::getMonoValue()
-{
-    return value / 32768.0;
-}
+#endif

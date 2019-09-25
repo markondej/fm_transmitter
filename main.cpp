@@ -31,13 +31,11 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "transmitter.h"
+#include "transmitter.hpp"
 #include <cstdlib>
 #include <csignal>
 #include <iostream>
 #include <unistd.h>
-
-using namespace std;
 
 bool play = true;
 Transmitter *transmitter = NULL;
@@ -45,7 +43,7 @@ Transmitter *transmitter = NULL;
 void sigIntHandler(int sigNum)
 {
     if (transmitter != NULL) {
-        cout << "Stopping..." << endl;
+        std::cout << "Stopping..." << std::endl;
         transmitter->stop();
         play = false;
     }
@@ -55,9 +53,9 @@ int main(int argc, char** argv)
 {
     double frequency = 100.0;
     double bandwidth = 100.0;
-    unsigned short dmaChannel = 0;
+    uint16_t dmaChannel = 0;
     bool loop = false;
-    string filename;
+    std::string filename;
     bool showUsage = true;
     int opt, filesOffset;
 
@@ -76,7 +74,7 @@ int main(int argc, char** argv)
                 bandwidth = ::atof(optarg);
                 break;
             case 'v':
-                cout << EXECUTABLE << " version: " << VERSION << endl;
+                std::cout << EXECUTABLE << " version: " << VERSION << std::endl;
                 return 0;
         }
     }
@@ -85,7 +83,7 @@ int main(int argc, char** argv)
         showUsage = false;
     }
     if (showUsage) {
-        cout << "Usage: " << EXECUTABLE << " [-f <frequency>] [-b <bandwidth>] [-d <dma_channel>] [-r] <file>" << endl;
+        std::cout << "Usage: " << EXECUTABLE << " [-f <frequency>] [-b <bandwidth>] [-d <dma_channel>] [-r] <file>" << std::endl;
         return 0;
     }
 
@@ -99,18 +97,18 @@ int main(int argc, char** argv)
             if ((optind == argc) && loop) {
                 optind = filesOffset;
             }
-            WaveReader reader(filename != "-" ? filename : string(), play);
+            WaveReader reader(filename != "-" ? filename : std::string(), play);
             PCMWaveHeader header = reader.getHeader();
-            cout << "Broadcasting at " << frequency << " MHz with " 
-                << bandwidth << " kHz bandwidth" << endl;
-            cout << "Playing: " << reader.getFilename() << ", "
+            std::cout << "Broadcasting at " << frequency << " MHz with " 
+                << bandwidth << " kHz bandwidth" << std::endl;
+            std::cout << "Playing: " << reader.getFilename() << ", "
                 << header.sampleRate << " Hz, "
                 << header.bitsPerSample << " bits, "
-                << ((header.channels > 0x01) ? "stereo" : "mono") << endl;
-            transmitter->play(reader, frequency, bandwidth, dmaChannel, optind < argc);
+                << ((header.channels > 0x01) ? "stereo" : "mono") << std::endl;
+            transmitter->transmit(reader, frequency, bandwidth, dmaChannel, optind < argc);
         } while (play && (optind < argc));
-    } catch (exception &error) {
-        cout << "Error: " << error.what() << endl;
+    } catch (std::exception &catched) {
+        std::cout << "Error: " << catched.what() << std::endl;
         return 1;
     }
 
