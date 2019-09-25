@@ -172,16 +172,16 @@ double Transmitter::getSourceFreq()
 }
 
 uint32_t Transmitter::getPeripheralPhysAddress(volatile void *object) {
-    return PERIPHERALS_PHYS_BASE + ((uint32_t)object - (uint32_t)peripherals);
+    return PERIPHERALS_PHYS_BASE + (reinterpret_cast<uint32_t>(object) - reinterpret_cast<uint32_t>(peripherals));
 }
 
 uint32_t Transmitter::getPeripheralVirtAddress(uint32_t offset) {
-    return (uint32_t)peripherals + offset;
+    return reinterpret_cast<uint32_t>(peripherals) + offset;
 }
 
 uint32_t Transmitter::getMemoryPhysAddress(AllocatedMemory &memory, volatile void *object)
 {
-    return memory.physicalBase + ((uint32_t)object - memory.virtualBase);
+    return memory.physicalBase + (reinterpret_cast<uint32_t>(object) - memory.virtualBase);
 }
 
 AllocatedMemory Transmitter::allocateMemory(uint32_t size)
@@ -198,14 +198,14 @@ AllocatedMemory Transmitter::allocateMemory(uint32_t size)
         return memory;
     }
     memory.physicalBase = mem_lock(memory.mBoxFd, memory.handle);
-    memory.virtualBase = (uint32_t)mapmem(memory.physicalBase & ~0xC0000000, size);
+    memory.virtualBase = reinterpret_cast<uint32_t>(mapmem(memory.physicalBase & ~0xC0000000, size));
     memory.size = size;
     return memory;
 }
 
 void Transmitter::freeMemory(AllocatedMemory &memory)
 {
-    unmapmem((void *)memory.virtualBase, memory.size);
+    unmapmem(reinterpret_cast<void *>(memory.virtualBase), memory.size);
     mem_unlock(memory.mBoxFd, memory.handle);
     mem_free(memory.mBoxFd, memory.handle);
     mbox_close(memory.mBoxFd);
@@ -214,14 +214,14 @@ void Transmitter::freeMemory(AllocatedMemory &memory)
 
 volatile PWMRegisters *Transmitter::initPwmController()
 {
-    volatile ClockRegisters *pwmClk = (ClockRegisters *)getPeripheralVirtAddress(PWMCLK_BASE_OFFSET);
+    volatile ClockRegisters *pwmClk = reinterpret_cast<ClockRegisters *>(getPeripheralVirtAddress(PWMCLK_BASE_OFFSET));
     double pwmClkFreq = PWM_WRITES_PER_SAMPLE * PWM_CHANNEL_RANGE * sampleRate / 1000000;
     pwmClk->ctl = (0x5A << 24) | 0x06;
     usleep(1000);
-    pwmClk->div = (0x5A << 24) | (uint32_t)(getSourceFreq() * (0x01 << 12) / pwmClkFreq);
+    pwmClk->div = (0x5A << 24) | static_cast<uint32_t>(getSourceFreq() * (0x01 << 12) / pwmClkFreq);
     pwmClk->ctl = (0x5A << 24) | (0x01 << 4) | 0x06;
 
-    volatile PWMRegisters *pwm = (PWMRegisters *)getPeripheralVirtAddress(PWM_BASE_OFFSET);
+    volatile PWMRegisters *pwm = reinterpret_cast<PWMRegisters *>(getPeripheralVirtAddress(PWM_BASE_OFFSET));
     pwm->ctl = 0x00000000;
     usleep(1000);
     pwm->status = 0x01FC;
@@ -240,7 +240,7 @@ void Transmitter::closePwmController(volatile PWMRegisters *pwm)
 
 volatile DMARegisters *Transmitter::startDma(AllocatedMemory &memory, volatile DMAControllBlock *dmaCb, uint8_t dmaChannel)
 {
-    volatile DMARegisters *dma = (DMARegisters *)getPeripheralVirtAddress((dmaChannel < 15) ? DMA0_BASE_OFFSET + dmaChannel * 0x100 : DMA15_BASE_OFFSET);
+    volatile DMARegisters *dma = reinterpret_cast<DMARegisters *>(getPeripheralVirtAddress((dmaChannel < 15) ? DMA0_BASE_OFFSET + dmaChannel * 0x100 : DMA15_BASE_OFFSET));
     dma->ctlStatus = (0x01 << 31);
     usleep(1000);
     dma->ctlStatus = (0x01 << 2) | (0x01 << 1);
@@ -256,8 +256,8 @@ void Transmitter::closeDma(volatile DMARegisters *dma)
 
 volatile ClockRegisters *Transmitter::initClockOutput()
 {
-    volatile ClockRegisters *clock = (ClockRegisters *)getPeripheralVirtAddress(CLK0_BASE_OFFSET);
-    volatile uint32_t *gpio = (uint32_t *)getPeripheralVirtAddress(GPIO_BASE_OFFSET);
+    volatile ClockRegisters *clock = reinterpret_cast<ClockRegisters *>(getPeripheralVirtAddress(CLK0_BASE_OFFSET));
+    volatile uint32_t *gpio = reinterpret_cast<uint32_t *>(getPeripheralVirtAddress(GPIO_BASE_OFFSET));
     clock->ctl = (0x5A << 24) | 0x06;
     usleep(1000);
     clock->div = (0x5A << 24) | clockDivisor;
@@ -280,11 +280,11 @@ void Transmitter::transmit(WaveReader &reader, double frequency, double bandwidt
     transmitting = true;
 
     PCMWaveHeader header = reader.getHeader();
-    uint32_t bufferSize = (uint32_t)((uint64_t)header.sampleRate * BUFFER_TIME / 1000000);
+    uint32_t bufferSize = static_cast<uint32_t>(static_cast<uint64_t>(header.sampleRate) * BUFFER_TIME / 1000000);
 
     preserveCarrier = preserveCarrierOnExit;
-    clockDivisor = (uint32_t)round(getSourceFreq() * (0x01 << 12) / frequency);
-    divisorRange = clockDivisor - (uint32_t)round(getSourceFreq() * (0x01 << 12) / (frequency + 0.0005 * bandwidth));
+    clockDivisor = static_cast<uint32_t>(round(getSourceFreq() * (0x01 << 12) / frequency));
+    divisorRange = clockDivisor - static_cast<uint32_t>(round(getSourceFreq() * (0x01 << 12) / (frequency + 0.0005 * bandwidth)));
     sampleRate = header.sampleRate;
 
     if (!clockInitialized) {
@@ -383,15 +383,15 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
     PreEmphasis preEmphasis(sampleRate);
 #endif
 
-    volatile DMAControllBlock *dmaCb = (DMAControllBlock *)dmaMemory.virtualBase;
-    volatile uint32_t *clkDiv = (uint32_t *)((uint32_t)dmaCb + 2 * sizeof(DMAControllBlock) * bufferSize);
-    volatile uint32_t *pwmFifoData = (uint32_t *)((uint32_t)clkDiv + sizeof(uint32_t) * bufferSize);
+    volatile DMAControllBlock *dmaCb = reinterpret_cast<DMAControllBlock *>(dmaMemory.virtualBase);
+    volatile uint32_t *clkDiv = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(dmaCb) + 2 * sizeof(DMAControllBlock) * bufferSize);
+    volatile uint32_t *pwmFifoData = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(clkDiv) + sizeof(uint32_t) * bufferSize);
     for (i = 0; i < bufferSize; i++) {
         value = (*samples)[i].getMonoValue();
 #ifndef NO_PREEMP
         value = preEmphasis.filter(value);
 #endif
-        clkDiv[i] = (0x5A << 24) | (clockDivisor - (int32_t)round(value * divisorRange));
+        clkDiv[i] = (0x5A << 24) | (clockDivisor - static_cast<int32_t>(round(value * divisorRange)));
         dmaCb[cbOffset].transferInfo = (0x01 << 26) | (0x01 << 3);
         dmaCb[cbOffset].srcAddress = getMemoryPhysAddress(dmaMemory, &clkDiv[i]);
         dmaCb[cbOffset].dstAddress = getPeripheralPhysAddress(&output->div);
@@ -432,7 +432,7 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
                 while (i == ((dma->cbAddress - getMemoryPhysAddress(dmaMemory, dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
                     usleep(1000);
                 }
-                clkDiv[i] = (0x5A << 24) | (clockDivisor - (int32_t)round(value * divisorRange));
+                clkDiv[i] = (0x5A << 24) | (clockDivisor - static_cast<int32_t>(round(value * divisorRange)));
                 cbOffset += 2;
             }
             delete samples;
@@ -470,8 +470,8 @@ void Transmitter::transmitThread()
     PreEmphasis preEmphasis(sampleRate);
 #endif
 
-    volatile TimerRegisters *timer = (TimerRegisters *)getPeripheralVirtAddress(TIMER_BASE_OFFSET);
-    uint64_t current = *(uint64_t *)&timer->low;
+    volatile TimerRegisters *timer = reinterpret_cast<TimerRegisters *>(getPeripheralVirtAddress(TIMER_BASE_OFFSET));
+    uint64_t current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
     uint64_t playbackStart = current;
 
     while (transmitting) {
@@ -479,7 +479,7 @@ void Transmitter::transmitThread()
 
         while ((buffer == nullptr) && transmitting) {
             usleep(1);
-            current = *(uint64_t *)&timer->low;
+            current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
         }
         if (!transmitting) {
             break;
@@ -501,10 +501,10 @@ void Transmitter::transmitThread()
 #ifndef NO_PREEMP
             value = preEmphasis.filter(value);
 #endif
-            output->div = (0x5A << 24) | (clockDivisor - (int32_t)round(value * divisorRange));
+            output->div = (0x5A << 24) | (clockDivisor - static_cast<int32_t>(round(value * divisorRange)));
             while (offset == prevOffset) {
-                usleep(1); // asm("nop"); 
-                current = *(uint64_t *)&timer->low;
+                usleep(1); // asm("nop");
+                current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));;
                 offset = (current - start) * sampleRate / 1000000;
             }
         }

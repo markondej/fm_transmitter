@@ -44,11 +44,11 @@ Sample::Sample(uint8_t *data, uint16_t channels, uint16_t bitsPerChannel)
         if (multiplier > 1) {
             channelValues[i] = (data[(i + 1) * multiplier - 1] << 8) | data[(i + 1) * multiplier - 2];
         } else {
-            channelValues[i] = ((int16_t)data[i] - 0x80) << 8;
+            channelValues[i] = (static_cast<int16_t>(data[i]) - 0x80) << 8;
         }
         sum += channelValues[i];
     }
-    value = 2 * (sum / channels) / (double)USHRT_MAX;
+    value = 2 * sum / channels / static_cast<double>(USHRT_MAX);
     delete[] channelValues;
 }
 
@@ -59,14 +59,14 @@ double Sample::getMonoValue()
 
 #ifndef NO_PREEMP
 PreEmphasis::PreEmphasis(uint32_t sampleRate)
-    : timeConst(sampleRate * 75.0e-6), prevValue(0.0)
+    : timeConst(sampleRate * 75.0e-6), prevValue(0.)
 {
 }
 
 double PreEmphasis::filter(double value)
 {
     prevValue = value;
-    value = value + (prevValue - value) / (1.0 - timeConst);
+    value = value + (prevValue - value) / (1. - timeConst);
     return value;
 }
 #endif
