@@ -48,10 +48,10 @@ class WaveReader
         WaveReader &operator=(const WaveReader &source) = delete;
         std::string getFilename();
         PCMWaveHeader getHeader();
-        std::vector<Sample> *getSamples(uint32_t quantity, bool &continueFlag);
+        std::vector<Sample> getSamples(uint32_t quantity, bool &continueFlag);
         bool setSampleOffset(uint32_t offset);
     private:
-        std::vector<uint8_t> *readData(uint32_t bytesToRead, bool headerBytes, bool &continueFlag);
+        std::vector<uint8_t> readData(uint32_t bytesToRead, bool headerBytes, bool &continueFlag);
 
         std::string filename;
         PCMWaveHeader header;
