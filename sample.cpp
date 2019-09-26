@@ -35,7 +35,7 @@
 #include <climits>
 
 Sample::Sample(uint8_t *data, uint16_t channels, uint16_t bitsPerChannel)
-    : value(0.)
+    : value(0.f)
 {
     int32_t sum = 0;
     int16_t *channelValues = new int16_t[channels];
@@ -48,25 +48,25 @@ Sample::Sample(uint8_t *data, uint16_t channels, uint16_t bitsPerChannel)
         }
         sum += channelValues[i];
     }
-    value = 2 * sum / channels / static_cast<double>(USHRT_MAX);
+    value = 2 * sum / channels / static_cast<float>(USHRT_MAX);
     delete[] channelValues;
 }
 
-double Sample::getMonoValue()
+float Sample::getMonoValue()
 {
     return value;
 }
 
 #ifndef NO_PREEMP
 PreEmphasis::PreEmphasis(uint32_t sampleRate)
-    : timeConst(sampleRate * 75.0e-6), prevValue(0.)
+    : timeConst(sampleRate * 75.0e-6f), prevValue(0.f)
 {
 }
 
-double PreEmphasis::filter(double value)
+float PreEmphasis::filter(float value)
 {
     prevValue = value;
-    value = value + (prevValue - value) / (1. - timeConst);
+    value = value + (prevValue - value) / (1.f - timeConst);
     return value;
 }
 #endif

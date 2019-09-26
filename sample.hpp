@@ -40,9 +40,9 @@ class Sample
 {
     public:
         Sample(uint8_t *data, uint16_t channels, uint16_t bitsPerChannel);
-        double getMonoValue();
+        float getMonoValue();
     protected:
-        double value;
+        float value;
 };
 
 #ifndef NO_PREEMP
@@ -50,9 +50,9 @@ class PreEmphasis
 {
     public:
         PreEmphasis(uint32_t sampleRate);
-        double filter(double value);
+        float filter(float value);
     protected:
-        double timeConst, prevValue;
+        float timeConst, prevValue;
 };
 #endif
 

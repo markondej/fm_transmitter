@@ -51,8 +51,8 @@ void sigIntHandler(int sigNum)
 
 int main(int argc, char** argv)
 {
-    double frequency = 100.0;
-    double bandwidth = 100.0;
+    float frequency = 100.f;
+    float bandwidth = 100.f;
     uint16_t dmaChannel = 0;
     bool loop = false;
     std::string filename;
