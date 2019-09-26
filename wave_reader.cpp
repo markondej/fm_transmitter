@@ -101,7 +101,6 @@ std::vector<uint8_t> *WaveReader::readData(uint32_t bytesToRead, bool headerByte
     uint32_t bytesRead = 0;
     std::vector<uint8_t> *data = new std::vector<uint8_t>();
     data->resize(bytesToRead);
-
     while ((bytesRead < bytesToRead) && continueFlag) {
         int bytes = read(fileDescriptor, &(*data)[bytesRead], bytesToRead - bytesRead);
         if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
@@ -142,36 +141,31 @@ std::vector<uint8_t> *WaveReader::readData(uint32_t bytesToRead, bool headerByte
 }
 
 std::vector<Sample> *WaveReader::getSamples(uint32_t quantity, bool &continueFlag) {
-    uint32_t bytesToRead, bytesLeft, bytesPerSample;
-    std::vector<Sample> *samples = new std::vector<Sample>();
-    std::vector<uint8_t> *data;
-
-    bytesPerSample = (header.bitsPerSample >> 3) * header.channels;
-    bytesToRead = quantity * bytesPerSample;
-    bytesLeft = header.subchunk2Size - currentDataOffset;
+    uint32_t bytesPerSample = (header.bitsPerSample >> 3) * header.channels;
+    uint32_t bytesToRead = quantity * bytesPerSample;
+    uint32_t bytesLeft = header.subchunk2Size - currentDataOffset;
     if (bytesToRead > bytesLeft) {
         bytesToRead = bytesLeft - bytesLeft % bytesPerSample;
         quantity = bytesToRead / bytesPerSample;
     }
 
+    std::vector<uint8_t> *data;
     try {
         data = readData(bytesToRead, false, continueFlag);
     } catch (std::runtime_error &error) {
-        delete samples;
         throw error;
     }
     if (data == NULL) {
-        delete samples;
         return NULL;
     }
     if (data->size() < bytesToRead) {
         quantity = data->size() / bytesPerSample;
     }
 
+    std::vector<Sample> *samples = new std::vector<Sample>();
     for (uint32_t i = 0; i < quantity; i++) {
         samples->push_back(Sample(&(*data)[bytesPerSample * i], header.channels, header.bitsPerSample));
     }
-
     delete data;
     return samples;
 }
