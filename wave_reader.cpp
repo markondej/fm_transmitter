@@ -96,16 +96,15 @@ WaveReader::~WaveReader()
     }
 }
 
-std::vector<uint8_t> *WaveReader::readData(uint32_t bytesToRead, bool headerBytes, bool &continueFlag)
+std::vector<uint8_t> WaveReader::readData(uint32_t bytesToRead, bool headerBytes, bool &continueFlag)
 {
     uint32_t bytesRead = 0;
-    std::vector<uint8_t> *data = new std::vector<uint8_t>();
-    data->resize(bytesToRead);
+    std::vector<uint8_t> data;
+    data.resize(bytesToRead);
     while ((bytesRead < bytesToRead) && continueFlag) {
-        int bytes = read(fileDescriptor, &(*data)[bytesRead], bytesToRead - bytesRead);
+        int bytes = read(fileDescriptor, &data[bytesRead], bytesToRead - bytesRead);
         if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
             ((static_cast<uint32_t>(bytes) < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
-            delete data;
             throw std::runtime_error(std::string("Error while opening ") + getFilename() + std::string(", data corrupted"));
         }
         if (bytes > 0) {
@@ -113,26 +112,20 @@ std::vector<uint8_t> *WaveReader::readData(uint32_t bytesToRead, bool headerByte
         }
         if (bytesRead < bytesToRead) {
             if (fileDescriptor != STDIN_FILENO) {
-                data->resize(bytes);
+                data.resize(bytes);
                 break;
+            } else {
+                usleep(1);
             }
-            usleep(1);
         }
-    }
-
-    if (!continueFlag) {
-        delete data;
-        data = NULL;
     }
 
     if (headerBytes) {
-        if (data == NULL) {
+        if (!continueFlag) {
             throw std::runtime_error("Cannot obtain header, program interrupted");
         }
-        std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], &(*data)[0], bytesRead);
+        std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], &data[0], bytesRead);
         headerOffset += bytesRead;
-        delete data;
-        data = NULL;
     } else {
         currentDataOffset += bytesRead;
     }
@@ -140,7 +133,7 @@ std::vector<uint8_t> *WaveReader::readData(uint32_t bytesToRead, bool headerByte
     return data;
 }
 
-std::vector<Sample> *WaveReader::getSamples(uint32_t quantity, bool &continueFlag) {
+std::vector<Sample> WaveReader::getSamples(uint32_t quantity, bool &continueFlag) {
     uint32_t bytesPerSample = (header.bitsPerSample >> 3) * header.channels;
     uint32_t bytesToRead = quantity * bytesPerSample;
     uint32_t bytesLeft = header.subchunk2Size - currentDataOffset;
@@ -149,24 +142,20 @@ std::vector<Sample> *WaveReader::getSamples(uint32_t quantity, bool &continueFla
         quantity = bytesToRead / bytesPerSample;
     }
 
-    std::vector<uint8_t> *data;
+    std::vector<uint8_t> data;
     try {
         data = readData(bytesToRead, false, continueFlag);
     } catch (std::runtime_error &error) {
         throw error;
     }
-    if (data == NULL) {
-        return NULL;
-    }
-    if (data->size() < bytesToRead) {
-        quantity = data->size() / bytesPerSample;
+    if (data.size() < bytesToRead) {
+        quantity = data.size() / bytesPerSample;
     }
 
-    std::vector<Sample> *samples = new std::vector<Sample>();
+    std::vector<Sample> samples;
     for (uint32_t i = 0; i < quantity; i++) {
-        samples->push_back(Sample(&(*data)[bytesPerSample * i], header.channels, header.bitsPerSample));
+        samples.push_back(Sample(&data[bytesPerSample * i], header.channels, header.bitsPerSample));
     }
-    delete data;
     return samples;
 }
 
