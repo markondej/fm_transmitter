@@ -142,12 +142,7 @@ std::vector<Sample> WaveReader::getSamples(uint32_t quantity, bool &continueFlag
         quantity = bytesToRead / bytesPerSample;
     }
 
-    std::vector<uint8_t> data;
-    try {
-        data = readData(bytesToRead, false, continueFlag);
-    } catch (std::runtime_error &error) {
-        throw error;
-    }
+    std::vector<uint8_t> data = readData(bytesToRead, false, continueFlag);
     if (data.size() < bytesToRead) {
         quantity = data.size() / bytesPerSample;
     }

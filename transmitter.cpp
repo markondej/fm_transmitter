@@ -287,8 +287,12 @@ void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth,
         output = initClockOutput();
     }
 
-    bool errorCatched = false;
-    std::string errorMessage;
+    auto finally = [&]() {
+        if (!preserveCarrier) {
+            closeClockOutput(output);
+            output = nullptr;
+        }
+    };
 
     try {
         if (dmaChannel != 0xFF) {
@@ -298,18 +302,11 @@ void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth,
         }
     } catch (std::runtime_error &catched) {
         preserveCarrier = false;
-        errorMessage = catched.what();
-        errorCatched = true;
+        finally();
+        throw catched;
     }
 
-    if (!preserveCarrier) {
-        closeClockOutput(output);
-        output = nullptr;
-    }
-
-    if (errorCatched) {
-        throw std::runtime_error(errorMessage);
-    }
+    finally();
 }
 
 void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
@@ -322,11 +319,15 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
     sampleOffset = 0;
     loadedSamples = &samples;
 
-    bool eof = samples.size() < bufferSize, errorCatched = false;
+    bool eof = samples.size() < bufferSize;
     std::thread txThread(Transmitter::transmitThread);
-    std::string errorMessage;
 
     usleep(BUFFER_TIME / 2);
+
+    auto finally = [&]() {
+        transmitting = false;
+        txThread.join();
+    };
 
     try {
         while (!eof && transmitting) {
@@ -344,14 +345,11 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
             usleep(BUFFER_TIME / 2);
         }
     } catch (std::runtime_error &catched) {
-        errorMessage = catched.what();
-        errorCatched = true;
+        finally();
+        throw catched;
     }
-    transmitting = false;
-    txThread.join();
-    if (errorCatched) {
-        throw std::runtime_error(errorMessage);
-    }
+
+    finally();
 }
 
 void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_t dmaChannel)
@@ -410,10 +408,21 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
     *pwmFifoData = 0x00000000;
 
     volatile DMARegisters *dma = startDma(dmaMemory, dmaCb, dmaChannel);
-    bool errorCatched = false;
-    std::string errorMessage;
 
     usleep(BUFFER_TIME / 4);
+
+    auto finally = [&]() {
+        dmaCb[(cbOffset < 2 * bufferSize) ? cbOffset : 0].nextCbAddress = 0x00000000;
+        while (dma->cbAddress != 0x00000000) {
+            usleep(1000);
+        }
+
+        closeDma(dma);
+        closePwmController(pwm);
+
+        freeMemory(dmaMemory);
+        transmitting = false;
+    };
 
     try {
         while (!eof && transmitting) {
@@ -436,24 +445,11 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
             }
         }
     } catch (std::runtime_error &catched) {
-        errorMessage = catched.what();
-        errorCatched = true;
+        finally();
+        throw catched;
     }
 
-    dmaCb[(cbOffset < 2 * bufferSize) ? cbOffset : 0].nextCbAddress = 0x00000000;
-    while (dma->cbAddress != 0x00000000) {
-        usleep(1000);
-    }
-
-    closeDma(dma);
-    closePwmController(pwm);
-
-    freeMemory(dmaMemory);
-    transmitting = false;
-
-    if (errorCatched) {
-        throw std::runtime_error(errorMessage);
-    }
+    finally();
 }
 
 void Transmitter::transmitThread()
