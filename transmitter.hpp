@@ -49,13 +49,13 @@ class Transmitter
         Transmitter(const Transmitter &source) = delete;
         Transmitter &operator=(const Transmitter &source) = delete;
         static Transmitter &getInstance();
-        void transmit(WaveReader &reader, double frequency, double bandwidth, uint8_t dmaChannel, bool preserveCarrierOnExit);
+        void transmit(WaveReader &reader, float frequency, float bandwidth, uint8_t dmaChannel, bool preserveCarrierOnExit);
         void stop();
     private:
         Transmitter();
         uint32_t getPeripheralsVirtBaseAddress();
         uint32_t getPeripheralsSize();
-        double getSourceFreq();
+        float getSourceFreq();
         uint32_t getPeripheralPhysAddress(volatile void *object);
         static uint32_t getPeripheralVirtAddress(uint32_t offset);
         uint32_t getMemoryPhysAddress(AllocatedMemory &memory, volatile void *object);

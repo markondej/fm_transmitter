@@ -165,7 +165,7 @@ uint32_t Transmitter::getPeripheralsSize()
     return size;
 }
 
-double Transmitter::getSourceFreq()
+float Transmitter::getSourceFreq()
 {
     return (getPeripheralsVirtBaseAddress() == BCM2838_PERI_VIRT_BASE) ? BCM2838_PLLD_FREQ : BCM2835_PLLD_FREQ;
 }
@@ -214,7 +214,7 @@ void Transmitter::freeMemory(AllocatedMemory &memory)
 volatile PWMRegisters *Transmitter::initPwmController()
 {
     volatile ClockRegisters *pwmClk = reinterpret_cast<ClockRegisters *>(getPeripheralVirtAddress(PWMCLK_BASE_OFFSET));
-    double pwmClkFreq = PWM_WRITES_PER_SAMPLE * PWM_CHANNEL_RANGE * sampleRate / 1000000;
+    float pwmClkFreq = PWM_WRITES_PER_SAMPLE * PWM_CHANNEL_RANGE * sampleRate / 1000000;
     pwmClk->ctl = (0x5A << 24) | 0x06;
     usleep(1000);
     pwmClk->div = (0x5A << 24) | static_cast<uint32_t>(getSourceFreq() * (0x01 << 12) / pwmClkFreq);
@@ -270,7 +270,7 @@ void Transmitter::closeClockOutput(volatile ClockRegisters *clock)
     clock->ctl = (0x5A << 24) | 0x06;
 }
 
-void Transmitter::transmit(WaveReader &reader, double frequency, double bandwidth, uint8_t dmaChannel, bool preserveCarrierOnExit)
+void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth, uint8_t dmaChannel, bool preserveCarrierOnExit)
 {
     if (transmitting) {
         throw std::runtime_error("Cannot play, transmitter already in use");
@@ -283,7 +283,7 @@ void Transmitter::transmit(WaveReader &reader, double frequency, double bandwidt
 
     preserveCarrier = preserveCarrierOnExit;
     clockDivisor = static_cast<uint32_t>(round(getSourceFreq() * (0x01 << 12) / frequency));
-    divisorRange = clockDivisor - static_cast<uint32_t>(round(getSourceFreq() * (0x01 << 12) / (frequency + 0.0005 * bandwidth)));
+    divisorRange = clockDivisor - static_cast<uint32_t>(round(getSourceFreq() * (0x01 << 12) / (frequency + 0.0005f * bandwidth)));
     sampleRate = header.sampleRate;
 
     output = (output != nullptr) ? output : initClockOutput();
@@ -377,7 +377,6 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
 
     volatile PWMRegisters *pwm = initPwmController();
 
-    double value;
     uint32_t i, cbOffset = 0;
 #ifndef NO_PREEMP
     PreEmphasis preEmphasis(sampleRate);
@@ -387,7 +386,7 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
     volatile uint32_t *clkDiv = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(dmaCb) + 2 * sizeof(DMAControllBlock) * bufferSize);
     volatile uint32_t *pwmFifoData = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(clkDiv) + sizeof(uint32_t) * bufferSize);
     for (i = 0; i < bufferSize; i++) {
-        value = samples[i].getMonoValue();
+        float value = samples[i].getMonoValue();
 #ifndef NO_PREEMP
         value = preEmphasis.filter(value);
 #endif
@@ -424,7 +423,7 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
             cbOffset = 0;
             eof = samples.size() < bufferSize;
             for (i = 0; i < samples.size(); i++) {
-                value = samples[i].getMonoValue();
+                float value = samples[i].getMonoValue();
 #ifndef NO_PREEMP
                 value = preEmphasis.filter(value);
 #endif
@@ -489,7 +488,7 @@ void Transmitter::transmitThread()
                 break;
             }
             uint32_t prevOffset = offset;
-            double value = samples[offset].getMonoValue();
+            float value = samples[offset].getMonoValue();
 #ifndef NO_PREEMP
             value = preEmphasis.filter(value);
 #endif
