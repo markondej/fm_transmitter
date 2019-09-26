@@ -117,14 +117,11 @@ struct AllocatedMemory {
     int mBoxFd;
 };
 
-void *Transmitter::peripherals = nullptr;
 bool Transmitter::transmitting = false;
-uint32_t Transmitter::sampleOffset = 0;
-uint32_t Transmitter::clockDivisor = 0;
-uint32_t Transmitter::divisorRange = 0;
-uint32_t Transmitter::sampleRate = 0;
 volatile ClockRegisters *Transmitter::output = nullptr;
-std::vector<Sample> *Transmitter::loadedSamples = nullptr;
+uint32_t Transmitter::sampleOffset, Transmitter::clockDivisor, Transmitter::divisorRange, Transmitter::sampleRate;
+std::vector<Sample> *Transmitter::loadedSamples;
+void *Transmitter::peripherals;
 
 Transmitter::Transmitter()
 {
@@ -290,6 +287,9 @@ void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth,
         output = initClockOutput();
     }
 
+    bool errorCatched = false;
+    std::string errorMessage;
+
     try {
         if (dmaChannel != 0xFF) {
             transmitViaDma(reader, bufferSize, dmaChannel);
@@ -297,14 +297,18 @@ void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth,
             transmitViaCpu(reader, bufferSize);
         }
     } catch (std::runtime_error &catched) {
-        closeClockOutput(output);
-        output = nullptr;
-        throw catched;
+        preserveCarrier = false;
+        errorMessage = catched.what();
+        errorCatched = true;
     }
 
     if (!preserveCarrier) {
         closeClockOutput(output);
         output = nullptr;
+    }
+
+    if (errorCatched) {
+        throw std::runtime_error(errorMessage);
     }
 }
 
