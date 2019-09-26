@@ -42,7 +42,6 @@ class ErrorReporter : public std::exception
     public:
         ErrorReporter();
         ErrorReporter(std::string message);
-        virtual ~ErrorReporter() throw();
 
         virtual const char *what() const throw();
     protected:

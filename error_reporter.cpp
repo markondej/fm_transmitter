@@ -39,11 +39,7 @@ ErrorReporter::ErrorReporter() :
 }
 
 ErrorReporter::ErrorReporter(std::string message) :
-    errorMessage(message) 
-{
-}
-
-ErrorReporter::~ErrorReporter() throw() 
+    errorMessage(message)
 {
 }
 
