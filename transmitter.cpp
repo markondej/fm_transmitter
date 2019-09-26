@@ -32,7 +32,6 @@
 */
 
 #include "transmitter.hpp"
-#include "error_reporter.hpp"
 #include "mailbox.h"
 #include <bcm_host.h>
 #include <thread>
@@ -131,13 +130,13 @@ Transmitter::Transmitter()
 {
     int memFd;
     if ((memFd = open("/dev/mem", O_RDWR | O_SYNC)) < 0) {
-        throw ErrorReporter("Cannot open /dev/mem (permission denied)");
+        throw std::runtime_error("Cannot open /dev/mem (permission denied)");
     }
 
     peripherals = mmap(nullptr, getPeripheralsSize(), PROT_READ | PROT_WRITE, MAP_SHARED, memFd, getPeripheralsVirtBaseAddress());
     close(memFd);
     if (peripherals == MAP_FAILED) {
-        throw ErrorReporter("Cannot obtain access to peripherals (mmap error)");
+        throw std::runtime_error("Cannot obtain access to peripherals (mmap error)");
     }
 }
 
@@ -274,7 +273,7 @@ void Transmitter::closeClockOutput(volatile ClockRegisters *clock)
 void Transmitter::transmit(WaveReader &reader, double frequency, double bandwidth, uint8_t dmaChannel, bool preserveCarrierOnExit)
 {
     if (transmitting) {
-        throw ErrorReporter("Cannot play, transmitter already in use");
+        throw std::runtime_error("Cannot play, transmitter already in use");
     }
 
     transmitting = true;
@@ -298,7 +297,7 @@ void Transmitter::transmit(WaveReader &reader, double frequency, double bandwidt
         } else {
             transmitViaCpu(reader, bufferSize);
         }
-    } catch (ErrorReporter &catched) {
+    } catch (std::runtime_error &catched) {
         closeClockOutput(output);
         throw catched;
     }
@@ -318,9 +317,9 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
     sampleOffset = 0;
     buffer = samples;
 
-    bool eof = samples->size() < bufferSize, exceptionCatched = false;
+    bool eof = samples->size() < bufferSize, errorCatched = false;
     std::thread txThread(Transmitter::transmitThread);
-    ErrorReporter exception;
+    std::string errorMessage;
 
     usleep(BUFFER_TIME / 2);
 
@@ -339,24 +338,24 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
             }
             usleep(BUFFER_TIME / 2);
         }
-    } catch (ErrorReporter &catched) {
-        exceptionCatched = true;
-        exception = catched;
+    } catch (std::runtime_error &catched) {
+        errorMessage = std::string(catched.what());
+        errorCatched = true;
     }
     transmitting = false;
     txThread.join();
     if (buffer != nullptr) {
         delete buffer;
     }
-    if (exceptionCatched) {
-        throw exception;
+    if (errorCatched) {
+        throw std::runtime_error(errorMessage);
     }
 }
 
 void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_t dmaChannel)
 {
     if (dmaChannel > 15) {
-        throw ErrorReporter("DMA channel number out of range (0 - 15)");
+        throw std::runtime_error("DMA channel number out of range (0 - 15)");
     }
 
     std::vector<Sample> *samples = reader.getSamples(bufferSize, transmitting);
@@ -372,7 +371,7 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
     AllocatedMemory dmaMemory = allocateMemory(sizeof(uint32_t) * (bufferSize + 1) + sizeof(DMAControllBlock) * (2 * bufferSize));
     if (!dmaMemory.size) {
         delete samples;
-        throw ErrorReporter("Cannot allocate memory");
+        throw std::runtime_error("Cannot allocate memory");
     }
 
     volatile PWMRegisters *pwm = initPwmController();
@@ -412,8 +411,8 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
     delete samples;
 
     volatile DMARegisters *dma = startDma(dmaMemory, dmaCb, dmaChannel);
-    bool exceptionCatched = false;
-    ErrorReporter exception;
+    bool errorCatched = false;
+    std::string errorMessage;
     usleep(BUFFER_TIME / 4);
 
     try {
@@ -437,9 +436,9 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
             }
             delete samples;
         }
-    } catch (ErrorReporter &catched) {
-        exceptionCatched = true;
-        exception = catched;
+    } catch (std::runtime_error &catched) {
+        errorMessage = std::string(catched.what());
+        errorCatched = true;
     }
 
     cbOffset = (cbOffset < 2 * bufferSize) ? cbOffset : 0;
@@ -454,8 +453,8 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
     freeMemory(dmaMemory);
     transmitting = false;
 
-    if (exceptionCatched) {
-        throw exception;
+    if (errorCatched) {
+        throw std::runtime_error(errorMessage);
     }
 }
 
