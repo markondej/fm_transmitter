@@ -124,7 +124,7 @@ uint32_t Transmitter::clockDivisor = 0;
 uint32_t Transmitter::divisorRange = 0;
 uint32_t Transmitter::sampleRate = 0;
 volatile ClockRegisters *Transmitter::output = nullptr;
-std::vector<Sample> *Transmitter::buffer = nullptr;
+std::vector<Sample> *Transmitter::loadedSamples = nullptr;
 
 Transmitter::Transmitter()
 {
@@ -309,15 +309,15 @@ void Transmitter::transmit(WaveReader &reader, double frequency, double bandwidt
 
 void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
 {
-    std::vector<Sample> *samples = reader.getSamples(bufferSize, transmitting);
-    if (samples == nullptr) {
+    std::vector<Sample> samples = reader.getSamples(bufferSize, transmitting);
+    if (!samples.size()) {
         return;
     }
 
     sampleOffset = 0;
-    buffer = samples;
+    loadedSamples = &samples;
 
-    bool eof = samples->size() < bufferSize, errorCatched = false;
+    bool eof = samples.size() < bufferSize, errorCatched = false;
     std::thread txThread(Transmitter::transmitThread);
     std::string errorMessage;
 
@@ -325,16 +325,16 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
 
     try {
         while (!eof && transmitting) {
-            if (buffer == nullptr) {
+            if (loadedSamples == nullptr) {
                 if (!reader.setSampleOffset(sampleOffset + bufferSize)) {
                     break;
                 }
                 samples = reader.getSamples(bufferSize, transmitting);
-                if (samples == nullptr) {
+                if (!samples.size()) {
                     break;
                 }
-                eof = samples->size() < bufferSize;
-                buffer = samples;
+                eof = samples.size() < bufferSize;
+                loadedSamples = &samples;
             }
             usleep(BUFFER_TIME / 2);
         }
@@ -344,9 +344,6 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
     }
     transmitting = false;
     txThread.join();
-    if (buffer != nullptr) {
-        delete buffer;
-    }
     if (errorCatched) {
         throw std::runtime_error(errorMessage);
     }
@@ -358,19 +355,18 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
         throw std::runtime_error("DMA channel number out of range (0 - 15)");
     }
 
-    std::vector<Sample> *samples = reader.getSamples(bufferSize, transmitting);
-    if (samples == nullptr) {
+    std::vector<Sample> samples = reader.getSamples(bufferSize, transmitting);
+    if (!samples.size()) {
         return;
     }
     bool eof = false;
-    if (samples->size() < bufferSize) {
-        bufferSize = samples->size();
+    if (samples.size() < bufferSize) {
+        bufferSize = samples.size();
         eof = true;
     }
 
     AllocatedMemory dmaMemory = allocateMemory(sizeof(uint32_t) * (bufferSize + 1) + sizeof(DMAControllBlock) * (2 * bufferSize));
     if (!dmaMemory.size) {
-        delete samples;
         throw std::runtime_error("Cannot allocate memory");
     }
 
@@ -386,7 +382,7 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
     volatile uint32_t *clkDiv = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(dmaCb) + 2 * sizeof(DMAControllBlock) * bufferSize);
     volatile uint32_t *pwmFifoData = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(clkDiv) + sizeof(uint32_t) * bufferSize);
     for (i = 0; i < bufferSize; i++) {
-        value = (*samples)[i].getMonoValue();
+        value = samples[i].getMonoValue();
 #ifndef NO_PREEMP
         value = preEmphasis.filter(value);
 #endif
@@ -408,7 +404,6 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
         cbOffset++;
     }
     *pwmFifoData = 0x00000000;
-    delete samples;
 
     volatile DMARegisters *dma = startDma(dmaMemory, dmaCb, dmaChannel);
     bool errorCatched = false;
@@ -418,13 +413,13 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
     try {
         while (!eof && transmitting) {
             samples = reader.getSamples(bufferSize, transmitting);
-            if (samples == nullptr) {
+            if (!samples.size()) {
                 break;
             }
             cbOffset = 0;
-            eof = samples->size() < bufferSize;
-            for (i = 0; i < samples->size(); i++) {
-                value = (*samples)[i].getMonoValue();
+            eof = samples.size() < bufferSize;
+            for (i = 0; i < samples.size(); i++) {
+                value = samples[i].getMonoValue();
 #ifndef NO_PREEMP
                 value = preEmphasis.filter(value);
 #endif
@@ -434,7 +429,6 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
                 clkDiv[i] = (0x5A << 24) | (clockDivisor - static_cast<int32_t>(round(value * divisorRange)));
                 cbOffset += 2;
             }
-            delete samples;
         }
     } catch (std::runtime_error &catched) {
         errorMessage = std::string(catched.what());
@@ -460,11 +454,6 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
 
 void Transmitter::transmitThread()
 {
-    uint32_t offset, length, prevOffset;
-    std::vector<Sample> *samples = nullptr;
-    uint64_t start;
-    double value;
-
 #ifndef NO_PREEMP
     PreEmphasis preEmphasis(sampleRate);
 #endif
@@ -474,9 +463,9 @@ void Transmitter::transmitThread()
     uint64_t playbackStart = current;
 
     while (transmitting) {
-        start = current;
+        uint64_t start = current;
 
-        while ((buffer == nullptr) && transmitting) {
+        while ((loadedSamples == nullptr) && transmitting) {
             usleep(1);
             current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
         }
@@ -484,19 +473,18 @@ void Transmitter::transmitThread()
             break;
         }
 
-        samples = buffer;
-        length = samples->size();
-        buffer = nullptr;
+        std::vector<Sample> samples(*loadedSamples);
+        loadedSamples = nullptr;
 
         sampleOffset = (current - playbackStart) * sampleRate / 1000000;
-        offset = (current - start) * sampleRate / 1000000;
+        uint32_t offset = (current - start) * sampleRate / 1000000;
 
         while (true) {
-            if (offset >= length) {
+            if (offset >= samples.size()) {
                 break;
             }
-            prevOffset = offset;
-            value = (*samples)[offset].getMonoValue();
+            uint32_t prevOffset = offset;
+            double value = samples[offset].getMonoValue();
 #ifndef NO_PREEMP
             value = preEmphasis.filter(value);
 #endif
@@ -507,7 +495,6 @@ void Transmitter::transmitThread()
                 offset = (current - start) * sampleRate / 1000000;
             }
         }
-        delete samples;
     }
 }
 

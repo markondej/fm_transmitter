@@ -77,7 +77,7 @@ class Transmitter
         static bool transmitting;
         static uint32_t sampleOffset, clockDivisor, divisorRange, sampleRate;
         static volatile ClockRegisters *output;
-        static std::vector<Sample> *buffer;
+        static std::vector<Sample> *loadedSamples;
 };
 
 #endif // TRANSMITTER_HPP
