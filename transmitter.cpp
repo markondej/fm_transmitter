@@ -286,10 +286,9 @@ void Transmitter::transmit(WaveReader &reader, double frequency, double bandwidt
     divisorRange = clockDivisor - static_cast<uint32_t>(round(getSourceFreq() * (0x01 << 12) / (frequency + 0.0005 * bandwidth)));
     sampleRate = header.sampleRate;
 
-    if (!clockInitialized) {
-        output = initClockOutput();
-        clockInitialized = true;
-    }
+    output = (output != nullptr) ? output : initClockOutput();
+    bool errorCatched = false;
+    std::string errorMessage;
 
     try {
         if (dmaChannel != 0xFF) {
@@ -298,12 +297,18 @@ void Transmitter::transmit(WaveReader &reader, double frequency, double bandwidt
             transmitViaCpu(reader, bufferSize);
         }
     } catch (std::runtime_error &catched) {
-        closeClockOutput(output);
-        throw catched;
+        errorMessage = catched.what();
+        preserveCarrier = false;
+        errorCatched = true;
     }
 
     if (!preserveCarrier) {
         closeClockOutput(output);
+        output = nullptr;
+    }
+
+    if (errorCatched) {
+        throw std::runtime_error(errorMessage);
     }
 }
 
@@ -339,7 +344,7 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
             usleep(BUFFER_TIME / 2);
         }
     } catch (std::runtime_error &catched) {
-        errorMessage = std::string(catched.what());
+        errorMessage = catched.what();
         errorCatched = true;
     }
     transmitting = false;
@@ -431,7 +436,7 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
             }
         }
     } catch (std::runtime_error &catched) {
-        errorMessage = std::string(catched.what());
+        errorMessage = catched.what();
         errorCatched = true;
     }
 

@@ -71,7 +71,7 @@ class Transmitter
         void transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_t dmaChannel);
         static void transmitThread();
 
-        bool clockInitialized, preserveCarrier;
+        bool preserveCarrier;
 
         static void *peripherals;
         static bool transmitting;
