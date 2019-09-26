@@ -286,9 +286,9 @@ void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth,
     divisorRange = clockDivisor - static_cast<uint32_t>(round(getSourceFreq() * (0x01 << 12) / (frequency + 0.0005f * bandwidth)));
     sampleRate = header.sampleRate;
 
-    output = (output != nullptr) ? output : initClockOutput();
-    bool errorCatched = false;
-    std::string errorMessage;
+    if (output == nullptr) {
+        output = initClockOutput();
+    }
 
     try {
         if (dmaChannel != 0xFF) {
@@ -297,18 +297,14 @@ void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth,
             transmitViaCpu(reader, bufferSize);
         }
     } catch (std::runtime_error &catched) {
-        errorMessage = catched.what();
-        preserveCarrier = false;
-        errorCatched = true;
+        closeClockOutput(output);
+        output = nullptr;
+        throw catched;
     }
 
     if (!preserveCarrier) {
         closeClockOutput(output);
         output = nullptr;
-    }
-
-    if (errorCatched) {
-        throw std::runtime_error(errorMessage);
     }
 }
 
@@ -412,6 +408,7 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
     volatile DMARegisters *dma = startDma(dmaMemory, dmaCb, dmaChannel);
     bool errorCatched = false;
     std::string errorMessage;
+
     usleep(BUFFER_TIME / 4);
 
     try {
@@ -439,8 +436,7 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
         errorCatched = true;
     }
 
-    cbOffset = (cbOffset < 2 * bufferSize) ? cbOffset : 0;
-    dmaCb[cbOffset].nextCbAddress = 0x00000000;
+    dmaCb[(cbOffset < 2 * bufferSize) ? cbOffset : 0].nextCbAddress = 0x00000000;
     while (dma->cbAddress != 0x00000000) {
         usleep(1000);
     }
