@@ -35,6 +35,7 @@
 #include "mailbox.h"
 #include <bcm_host.h>
 #include <thread>
+#include <chrono>
 #include <cmath>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -213,16 +214,16 @@ volatile PWMRegisters *Transmitter::initPwmController()
     volatile ClockRegisters *pwmClk = reinterpret_cast<ClockRegisters *>(getPeripheralVirtAddress(PWMCLK_BASE_OFFSET));
     float pwmClkFreq = PWM_WRITES_PER_SAMPLE * PWM_CHANNEL_RANGE * sampleRate / 1000000;
     pwmClk->ctl = (0x5A << 24) | 0x06;
-    usleep(1000);
+    std::this_thread::sleep_for(std::chrono::microseconds(1000));
     pwmClk->div = (0x5A << 24) | static_cast<uint32_t>(getSourceFreq() * (0x01 << 12) / pwmClkFreq);
     pwmClk->ctl = (0x5A << 24) | (0x01 << 4) | 0x06;
 
     volatile PWMRegisters *pwm = reinterpret_cast<PWMRegisters *>(getPeripheralVirtAddress(PWM_BASE_OFFSET));
     pwm->ctl = 0x00000000;
-    usleep(1000);
+    std::this_thread::sleep_for(std::chrono::microseconds(1000));
     pwm->status = 0x01FC;
     pwm->ctl = (0x01 << 6);
-    usleep(1000);
+    std::this_thread::sleep_for(std::chrono::microseconds(1000));
     pwm->chn1Range = PWM_CHANNEL_RANGE;
     pwm->dmaConf = (0x01 << 31) | 0x0707;
     pwm->ctl = (0x01 << 5) | (0x01 << 2) | 0x01;
@@ -238,7 +239,7 @@ volatile DMARegisters *Transmitter::startDma(AllocatedMemory &memory, volatile D
 {
     volatile DMARegisters *dma = reinterpret_cast<DMARegisters *>(getPeripheralVirtAddress((dmaChannel < 15) ? DMA0_BASE_OFFSET + dmaChannel * 0x100 : DMA15_BASE_OFFSET));
     dma->ctlStatus = (0x01 << 31);
-    usleep(1000);
+    std::this_thread::sleep_for(std::chrono::microseconds(1000));
     dma->ctlStatus = (0x01 << 2) | (0x01 << 1);
     dma->cbAddress = getMemoryPhysAddress(memory, dmaCb);
     dma->ctlStatus = (0xFF << 16) | 0x01;
@@ -255,7 +256,7 @@ volatile ClockRegisters *Transmitter::initClockOutput()
     volatile ClockRegisters *clock = reinterpret_cast<ClockRegisters *>(getPeripheralVirtAddress(CLK0_BASE_OFFSET));
     volatile uint32_t *gpio = reinterpret_cast<uint32_t *>(getPeripheralVirtAddress(GPIO_BASE_OFFSET));
     clock->ctl = (0x5A << 24) | 0x06;
-    usleep(1000);
+    std::this_thread::sleep_for(std::chrono::microseconds(1000));
     clock->div = (0x5A << 24) | clockDivisor;
     clock->ctl = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
     *gpio = (*gpio & 0xFFFF8FFF) | (0x01 << 14);
@@ -322,7 +323,7 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
     bool eof = samples.size() < bufferSize;
     std::thread txThread(Transmitter::transmitThread);
 
-    usleep(BUFFER_TIME / 2);
+    std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 2));
 
     auto finally = [&]() {
         transmitting = false;
@@ -342,7 +343,7 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
                 eof = samples.size() < bufferSize;
                 loadedSamples = &samples;
             }
-            usleep(BUFFER_TIME / 2);
+            std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 2));
         }
     } catch (std::runtime_error &catched) {
         finally();
@@ -409,12 +410,12 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
 
     volatile DMARegisters *dma = startDma(dmaMemory, dmaCb, dmaChannel);
 
-    usleep(BUFFER_TIME / 4);
+    std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 4));
 
     auto finally = [&]() {
         dmaCb[(cbOffset < 2 * bufferSize) ? cbOffset : 0].nextCbAddress = 0x00000000;
         while (dma->cbAddress != 0x00000000) {
-            usleep(1000);
+            std::this_thread::sleep_for(std::chrono::microseconds(1000));
         }
 
         closeDma(dma);
@@ -438,7 +439,7 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
                 value = preEmphasis.filter(value);
 #endif
                 while (i == ((dma->cbAddress - getMemoryPhysAddress(dmaMemory, dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
-                    usleep(1000);
+                    std::this_thread::sleep_for(std::chrono::microseconds(1000));
                 }
                 clkDiv[i] = (0x5A << 24) | (clockDivisor - static_cast<int32_t>(round(value * divisorRange)));
                 cbOffset += 2;
@@ -466,7 +467,7 @@ void Transmitter::transmitThread()
         uint64_t start = current;
 
         while ((loadedSamples == nullptr) && transmitting) {
-            usleep(1);
+            std::this_thread::sleep_for(std::chrono::microseconds(1));
             current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
         }
         if (!transmitting) {
@@ -490,7 +491,7 @@ void Transmitter::transmitThread()
 #endif
             output->div = (0x5A << 24) | (clockDivisor - static_cast<int32_t>(round(value * divisorRange)));
             while (offset == prevOffset) {
-                usleep(1); // asm("nop");
+                std::this_thread::sleep_for(std::chrono::microseconds(1)); // asm("nop");
                 current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));;
                 offset = (current - start) * sampleRate / 1000000;
             }
