@@ -51,12 +51,9 @@ void sigIntHandler(int sigNum)
 
 int main(int argc, char** argv)
 {
-    float frequency = 100.f;
-    float bandwidth = 100.f;
+    float frequency = 100.f, bandwidth = 100.f;
     uint16_t dmaChannel = 0;
-    bool loop = false;
-    std::string filename;
-    bool showUsage = true;
+    bool showUsage = true, loop = false;
     int opt, filesOffset;
 
     while ((opt = getopt(argc, argv, "rf:d:b:v")) != -1) {
@@ -93,7 +90,7 @@ int main(int argc, char** argv)
     try {
         transmitter = &Transmitter::getInstance();
         do {
-            filename = argv[optind++];
+            std::string filename = argv[optind++];
             if ((optind == argc) && loop) {
                 optind = filesOffset;
             }
