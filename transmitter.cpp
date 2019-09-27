@@ -121,7 +121,8 @@ struct AllocatedMemory {
 bool Transmitter::transmitting = false;
 volatile ClockRegisters *Transmitter::output = nullptr;
 uint32_t Transmitter::sampleOffset, Transmitter::clockDivisor, Transmitter::divisorRange, Transmitter::sampleRate;
-std::vector<Sample> *Transmitter::loadedSamples;
+std::vector<Sample> Transmitter::samples;
+std::mutex Transmitter::samplesMutex;
 void *Transmitter::peripherals;
 
 Transmitter::Transmitter()
@@ -294,7 +295,6 @@ void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth,
             output = nullptr;
         }
     };
-
     try {
         if (dmaChannel != 0xFF) {
             transmitViaDma(reader, bufferSize, dmaChannel);
@@ -306,33 +306,35 @@ void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth,
         finally();
         throw catched;
     }
-
     finally();
 }
 
 void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
 {
-    std::vector<Sample> samples = reader.getSamples(bufferSize, transmitting);
+    samples = reader.getSamples(bufferSize, transmitting);
     if (!samples.size()) {
         return;
     }
-
     sampleOffset = 0;
-    loadedSamples = &samples;
 
     bool eof = samples.size() < bufferSize;
     std::thread txThread(Transmitter::transmitThread);
 
     std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 2));
+    bool wait = false;
 
     auto finally = [&]() {
         transmitting = false;
         txThread.join();
+        samples.clear();
     };
-
     try {
         while (!eof && transmitting) {
-            if (loadedSamples == nullptr) {
+            if (wait) {
+                std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 2));
+            }
+            std::lock_guard<std::mutex> locked(samplesMutex);
+            if (!samples.size()) {
                 if (!reader.setSampleOffset(sampleOffset + bufferSize)) {
                     break;
                 }
@@ -341,15 +343,13 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
                     break;
                 }
                 eof = samples.size() < bufferSize;
-                loadedSamples = &samples;
             }
-            std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 2));
+            wait = true;
         }
     } catch (std::runtime_error &catched) {
         finally();
         throw catched;
     }
-
     finally();
 }
 
@@ -359,7 +359,7 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
         throw std::runtime_error("DMA channel number out of range (0 - 15)");
     }
 
-    std::vector<Sample> samples = reader.getSamples(bufferSize, transmitting);
+    samples = reader.getSamples(bufferSize, transmitting);
     if (!samples.size()) {
         return;
     }
@@ -423,8 +423,8 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
 
         freeMemory(dmaMemory);
         transmitting = false;
+        samples.clear();
     };
-
     try {
         while (!eof && transmitting) {
             samples = reader.getSamples(bufferSize, transmitting);
@@ -449,7 +449,6 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
         finally();
         throw catched;
     }
-
     finally();
 }
 
@@ -466,26 +465,30 @@ void Transmitter::transmitThread()
     while (transmitting) {
         uint64_t start = current;
 
-        while ((loadedSamples == nullptr) && transmitting) {
+        bool locked = samplesMutex.try_lock();
+        while (!locked && transmitting) {
             std::this_thread::sleep_for(std::chrono::microseconds(1));
             current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
+            locked = samplesMutex.try_lock();
         }
         if (!transmitting) {
+            if (locked) {
+                samplesMutex.unlock();
+            }
             break;
         }
-
-        std::vector<Sample> samples(*loadedSamples);
-        loadedSamples = nullptr;
+        std::vector<Sample> loaded(std::move(samples));
+        samplesMutex.unlock();
 
         sampleOffset = (current - playbackStart) * sampleRate / 1000000;
         uint32_t offset = (current - start) * sampleRate / 1000000;
 
         while (true) {
-            if (offset >= samples.size()) {
+            if (offset >= loaded.size()) {
                 break;
             }
             uint32_t prevOffset = offset;
-            float value = samples[offset].getMonoValue();
+            float value = loaded[offset].getMonoValue();
 #ifndef NO_PREEMP
             value = preEmphasis.filter(value);
 #endif
