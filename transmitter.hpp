@@ -35,6 +35,7 @@
 #define TRANSMITTER_HPP
 
 #include "wave_reader.hpp"
+#include <mutex>
 
 struct AllocatedMemory;
 struct PWMRegisters;
@@ -77,7 +78,8 @@ class Transmitter
         static bool transmitting;
         static uint32_t sampleOffset, clockDivisor, divisorRange, sampleRate;
         static volatile ClockRegisters *output;
-        static std::vector<Sample> *loadedSamples;
+        static std::vector<Sample> samples;
+        static std::mutex samplesMutex;
 };
 
 #endif // TRANSMITTER_HPP

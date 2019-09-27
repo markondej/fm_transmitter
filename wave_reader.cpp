@@ -34,6 +34,8 @@
 #include "wave_reader.hpp"
 #include <stdexcept>
 #include <cstring>
+#include <thread>
+#include <chrono>
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -115,7 +117,7 @@ std::vector<uint8_t> WaveReader::readData(uint32_t bytesToRead, bool headerBytes
                 data.resize(bytes);
                 break;
             } else {
-                usleep(1);
+                std::this_thread::sleep_for(std::chrono::microseconds(1));
             }
         }
     }
