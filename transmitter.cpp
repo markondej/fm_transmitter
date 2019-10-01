@@ -466,7 +466,10 @@ void Transmitter::transmitThread()
         uint64_t start = current;
 
         bool locked = samplesMutex.try_lock();
-        while (!locked && transmitting) {
+        while ((!locked || !samples.size()) && transmitting) {
+            if (locked) {
+                samplesMutex.unlock();
+            }
             std::this_thread::sleep_for(std::chrono::microseconds(1));
             current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
             locked = samplesMutex.try_lock();
