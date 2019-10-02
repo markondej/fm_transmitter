@@ -466,22 +466,23 @@ void Transmitter::transmitThread()
         uint64_t start = current;
 
         bool locked = samplesMutex.try_lock();
-        while ((!locked || !samples.size()) && transmitting) {
+        auto unlock = [&]() {
             if (locked) {
                 samplesMutex.unlock();
             }
+        };
+        while ((!locked || !samples.size()) && transmitting) {
+            unlock();
             std::this_thread::sleep_for(std::chrono::microseconds(1));
             current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
             locked = samplesMutex.try_lock();
         }
         if (!transmitting) {
-            if (locked) {
-                samplesMutex.unlock();
-            }
+            unlock();
             break;
         }
         std::vector<Sample> loaded(std::move(samples));
-        samplesMutex.unlock();
+        unlock();
 
         sampleOffset = (current - playbackStart) * sampleRate / 1000000;
         uint32_t offset = (current - start) * sampleRate / 1000000;
