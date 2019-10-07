@@ -79,11 +79,11 @@ WaveReader::WaveReader(std::string filename, bool &continueFlag) :
         if (std::string(reinterpret_cast<char *>(header.subchunk2ID), 4) != std::string("data")) {
             throw std::runtime_error(std::string("Error while opening ") + getFilename() + std::string(", data corrupted"));
         }
-    } catch (std::runtime_error &error) {
+    } catch (...) {
         if (fileDescriptor != STDIN_FILENO) {
             close(fileDescriptor);
         }
-        throw error;
+        throw;
     }
 
     if (fileDescriptor != STDIN_FILENO) {

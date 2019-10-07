@@ -301,10 +301,10 @@ void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth,
         } else {
             transmitViaCpu(reader, bufferSize);
         }
-    } catch (std::runtime_error &catched) {
+    } catch (...) {
         preserveCarrier = false;
         finally();
-        throw catched;
+        throw;
     }
     finally();
 }
@@ -346,9 +346,9 @@ void Transmitter::transmitViaCpu(WaveReader &reader, uint32_t bufferSize)
             }
             wait = true;
         }
-    } catch (std::runtime_error &catched) {
+    } catch (...) {
         finally();
-        throw catched;
+        throw;
     }
     finally();
 }
@@ -445,9 +445,9 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
                 cbOffset += 2;
             }
         }
-    } catch (std::runtime_error &catched) {
+    } catch (...) {
         finally();
-        throw catched;
+        throw;
     }
     finally();
 }
