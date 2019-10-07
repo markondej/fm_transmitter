@@ -47,8 +47,9 @@ class Transmitter
 {
     public:
         virtual ~Transmitter();
-        Transmitter(const Transmitter &source) = delete;
-        Transmitter &operator=(const Transmitter &source) = delete;
+        Transmitter(const Transmitter &) = delete;
+        Transmitter(Transmitter &&) = delete;
+        Transmitter &operator=(const Transmitter &) = delete;
         static Transmitter &getInstance();
         void transmit(WaveReader &reader, float frequency, float bandwidth, uint8_t dmaChannel, bool preserveCarrierOnExit);
         void stop();

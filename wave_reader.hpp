@@ -44,8 +44,9 @@ class WaveReader
     public:
         WaveReader(std::string filename, bool &continueFlag);
         virtual ~WaveReader();
-        WaveReader(const WaveReader &source) = delete;
-        WaveReader &operator=(const WaveReader &source) = delete;
+        WaveReader(const WaveReader &) = delete;
+        WaveReader(WaveReader &&) = delete;
+        WaveReader &operator=(const WaveReader &) = delete;
         std::string getFilename();
         PCMWaveHeader getHeader();
         std::vector<Sample> getSamples(uint32_t quantity, bool &continueFlag);
