@@ -114,7 +114,7 @@ struct DMARegisters {
 };
 
 struct AllocatedMemory {
-    uint32_t handle, size, physicalBase, virtualBase;
+    uintptr_t handle, size, physicalBase, virtualBase;
     int mBoxFd;
 };
 
@@ -169,17 +169,17 @@ float Transmitter::getSourceFreq()
     return (getPeripheralsVirtBaseAddress() == BCM2838_PERI_VIRT_BASE) ? BCM2838_PLLD_FREQ : BCM2835_PLLD_FREQ;
 }
 
-uint32_t Transmitter::getPeripheralPhysAddress(volatile void *object) {
-    return PERIPHERALS_PHYS_BASE + (reinterpret_cast<uint32_t>(object) - reinterpret_cast<uint32_t>(peripherals));
+uintptr_t Transmitter::getPeripheralPhysAddress(volatile void *object) {
+    return PERIPHERALS_PHYS_BASE + (reinterpret_cast<uintptr_t>(object) - reinterpret_cast<uintptr_t>(peripherals));
 }
 
-uint32_t Transmitter::getPeripheralVirtAddress(uint32_t offset) {
-    return reinterpret_cast<uint32_t>(peripherals) + offset;
+uintptr_t Transmitter::getPeripheralVirtAddress(uintptr_t offset) {
+    return reinterpret_cast<uintptr_t>(peripherals) + offset;
 }
 
-uint32_t Transmitter::getMemoryPhysAddress(AllocatedMemory &memory, volatile void *object)
+uintptr_t Transmitter::getMemoryPhysAddress(AllocatedMemory &memory, volatile void *object)
 {
-    return memory.physicalBase + (reinterpret_cast<uint32_t>(object) - memory.virtualBase);
+    return memory.physicalBase + (reinterpret_cast<uintptr_t>(object) - memory.virtualBase);
 }
 
 AllocatedMemory Transmitter::allocateMemory(uint32_t size)
@@ -196,7 +196,7 @@ AllocatedMemory Transmitter::allocateMemory(uint32_t size)
         return memory;
     }
     memory.physicalBase = mem_lock(memory.mBoxFd, memory.handle);
-    memory.virtualBase = reinterpret_cast<uint32_t>(mapmem(memory.physicalBase & ~0xC0000000, size));
+    memory.virtualBase = reinterpret_cast<uintptr_t>(mapmem(memory.physicalBase & ~0xC0000000, size));
     memory.size = size;
     return memory;
 }
@@ -278,7 +278,7 @@ void Transmitter::transmit(WaveReader &reader, float frequency, float bandwidth,
     transmitting = true;
 
     PCMWaveHeader header = reader.getHeader();
-    uint32_t bufferSize = static_cast<uint32_t>(static_cast<uint64_t>(header.sampleRate) * BUFFER_TIME / 1000000);
+    uint32_t bufferSize = static_cast<uint32_t>(static_cast<uintptr_t>(header.sampleRate) * BUFFER_TIME / 1000000);
 
     preserveCarrier = preserveCarrierOnExit;
     clockDivisor = static_cast<uint32_t>(round(getSourceFreq() * (0x01 << 12) / frequency));
@@ -382,8 +382,8 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
 #endif
 
     volatile DMAControllBlock *dmaCb = reinterpret_cast<DMAControllBlock *>(dmaMemory.virtualBase);
-    volatile uint32_t *clkDiv = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(dmaCb) + 2 * sizeof(DMAControllBlock) * bufferSize);
-    volatile uint32_t *pwmFifoData = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(clkDiv) + sizeof(uint32_t) * bufferSize);
+    volatile uint32_t *clkDiv = reinterpret_cast<uint32_t *>(reinterpret_cast<uintptr_t>(dmaCb) + 2 * sizeof(DMAControllBlock) * bufferSize);
+    volatile uint32_t *pwmFifoData = reinterpret_cast<uint32_t *>(reinterpret_cast<uintptr_t>(clkDiv) + sizeof(uint32_t) * bufferSize);
     for (i = 0; i < bufferSize; i++) {
         float value = samples[i].getMonoValue();
 #ifndef NO_PREEMP
@@ -459,11 +459,11 @@ void Transmitter::transmitThread()
 #endif
 
     volatile TimerRegisters *timer = reinterpret_cast<TimerRegisters *>(getPeripheralVirtAddress(TIMER_BASE_OFFSET));
-    uint64_t current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
-    uint64_t playbackStart = current;
+    uintptr_t current = *(reinterpret_cast<volatile uintptr_t *>(&timer->low));
+    uintptr_t playbackStart = current;
 
     while (transmitting) {
-        uint64_t start = current;
+        uintptr_t start = current;
 
         bool locked = samplesMutex.try_lock();
         auto unlock = [&]() {
@@ -474,7 +474,7 @@ void Transmitter::transmitThread()
         while ((!locked || !samples.size()) && transmitting) {
             unlock();
             std::this_thread::sleep_for(std::chrono::microseconds(1));
-            current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
+            current = *(reinterpret_cast<volatile uintptr_t *>(&timer->low));
             locked = samplesMutex.try_lock();
         }
         if (!transmitting) {
@@ -499,7 +499,7 @@ void Transmitter::transmitThread()
             output->div = (0x5A << 24) | (clockDivisor - static_cast<int32_t>(round(value * divisorRange)));
             while (offset == prevOffset) {
                 std::this_thread::sleep_for(std::chrono::microseconds(1)); // asm("nop");
-                current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));;
+                current = *(reinterpret_cast<volatile uintptr_t *>(&timer->low));;
                 offset = (current - start) * sampleRate / 1000000;
             }
         }
