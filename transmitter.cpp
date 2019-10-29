@@ -150,12 +150,12 @@ Transmitter &Transmitter::getInstance()
     return instance;
 }
 
-uint32_t Transmitter::getPeripheralsVirtBaseAddress()
+uint32_t Transmitter::getPeripheralsVirtBaseAddress() const
 {
     return (bcm_host_get_peripheral_size() == BCM2838_PERI_VIRT_BASE) ? BCM2838_PERI_VIRT_BASE : bcm_host_get_peripheral_address();
 }
 
-uint32_t Transmitter::getPeripheralsSize()
+uint32_t Transmitter::getPeripheralsSize() const
 {
     uint32_t size = bcm_host_get_peripheral_size();
     if (size == BCM2838_PERI_VIRT_BASE) {
@@ -164,20 +164,22 @@ uint32_t Transmitter::getPeripheralsSize()
     return size;
 }
 
-float Transmitter::getSourceFreq()
+float Transmitter::getSourceFreq() const
 {
     return (getPeripheralsVirtBaseAddress() == BCM2838_PERI_VIRT_BASE) ? BCM2838_PLLD_FREQ : BCM2835_PLLD_FREQ;
 }
 
-uint32_t Transmitter::getPeripheralPhysAddress(volatile void *object) {
+uint32_t Transmitter::getPeripheralPhysAddress(volatile void *object) const
+{
     return PERIPHERALS_PHYS_BASE + (reinterpret_cast<uint32_t>(object) - reinterpret_cast<uint32_t>(peripherals));
 }
 
-uint32_t Transmitter::getPeripheralVirtAddress(uint32_t offset) {
+uint32_t Transmitter::getPeripheralVirtAddress(uint32_t offset) const
+{
     return reinterpret_cast<uint32_t>(peripherals) + offset;
 }
 
-uint32_t Transmitter::getMemoryPhysAddress(AllocatedMemory &memory, volatile void *object)
+uint32_t Transmitter::getMemoryPhysAddress(AllocatedMemory &memory, volatile void *object) const
 {
     return memory.physicalBase + (reinterpret_cast<uint32_t>(object) - memory.virtualBase);
 }

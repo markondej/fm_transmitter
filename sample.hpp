@@ -40,7 +40,7 @@ class Sample
 {
     public:
         Sample(uint8_t *data, uint16_t channels, uint16_t bitsPerChannel);
-        float getMonoValue();
+        float getMonoValue() const;
     protected:
         float value;
 };

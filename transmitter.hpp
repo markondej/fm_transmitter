@@ -55,12 +55,12 @@ class Transmitter
         void stop();
     private:
         Transmitter();
-        uint32_t getPeripheralsVirtBaseAddress();
-        uint32_t getPeripheralsSize();
-        float getSourceFreq();
-        uint32_t getPeripheralPhysAddress(volatile void *object);
-        static uint32_t getPeripheralVirtAddress(uint32_t offset);
-        uint32_t getMemoryPhysAddress(AllocatedMemory &memory, volatile void *object);
+        uint32_t getPeripheralsVirtBaseAddress() const;
+        uint32_t getPeripheralsSize() const;
+        float getSourceFreq() const;
+        uint32_t getPeripheralPhysAddress(volatile void *object) const;
+        static uint32_t getPeripheralVirtAddress(uint32_t offset) const;
+        uint32_t getMemoryPhysAddress(AllocatedMemory &memory, volatile void *object) const;
         AllocatedMemory allocateMemory(uint32_t size);
         void freeMemory(AllocatedMemory &memory);
         volatile PWMRegisters *initPwmController();

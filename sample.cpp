@@ -52,7 +52,7 @@ Sample::Sample(uint8_t *data, uint16_t channels, uint16_t bitsPerChannel)
     delete[] channelValues;
 }
 
-float Sample::getMonoValue()
+float Sample::getMonoValue() const
 {
     return value;
 }
@@ -65,8 +65,8 @@ PreEmphasis::PreEmphasis(uint32_t sampleRate)
 
 float PreEmphasis::filter(float value)
 {
-    prevValue = value;
     value = value + (prevValue - value) / (1.f - timeConst);
+    prevValue = value;
     return value;
 }
 #endif

@@ -42,13 +42,13 @@
 class WaveReader
 {
     public:
-        WaveReader(std::string filename, bool &continueFlag);
+        WaveReader(const std::string &filename, bool &continueFlag);
         virtual ~WaveReader();
         WaveReader(const WaveReader &) = delete;
         WaveReader(WaveReader &&) = delete;
         WaveReader &operator=(const WaveReader &) = delete;
-        std::string getFilename();
-        PCMWaveHeader getHeader();
+        std::string getFilename() const;
+        PCMWaveHeader getHeader() const;
         std::vector<Sample> getSamples(uint32_t quantity, bool &continueFlag);
         bool setSampleOffset(uint32_t offset);
     private:

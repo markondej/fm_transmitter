@@ -39,7 +39,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-WaveReader::WaveReader(std::string filename, bool &continueFlag) :
+WaveReader::WaveReader(const std::string &filename, bool &continueFlag) :
     filename(filename), headerOffset(0), currentDataOffset(0)
 {
     if (!filename.empty()) {
@@ -126,7 +126,7 @@ std::vector<uint8_t> WaveReader::readData(uint32_t bytesToRead, bool headerBytes
         if (!continueFlag) {
             throw std::runtime_error("Cannot obtain header, program interrupted");
         }
-        std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], &data[0], bytesRead);
+        std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], data.data(), bytesRead);
         headerOffset += bytesRead;
     } else {
         currentDataOffset += bytesRead;
@@ -144,7 +144,7 @@ std::vector<Sample> WaveReader::getSamples(uint32_t quantity, bool &continueFlag
         quantity = bytesToRead / bytesPerSample;
     }
 
-    std::vector<uint8_t> data = readData(bytesToRead, false, continueFlag);
+    std::vector<uint8_t> data(std::move(readData(bytesToRead, false, continueFlag)));
     if (data.size() < bytesToRead) {
         quantity = data.size() / bytesPerSample;
     }
@@ -166,12 +166,12 @@ bool WaveReader::setSampleOffset(uint32_t offset) {
     return true;
 }
 
-std::string WaveReader::getFilename()
+std::string WaveReader::getFilename() const
 {
     return fileDescriptor != STDIN_FILENO ? filename : "STDIN";
 }
 
-PCMWaveHeader WaveReader::getHeader()
+PCMWaveHeader WaveReader::getHeader() const
 {
     return header;
 }
