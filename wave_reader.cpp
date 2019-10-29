@@ -126,7 +126,7 @@ std::vector<uint8_t> WaveReader::readData(uint32_t bytesToRead, bool headerBytes
         if (!continueFlag) {
             throw std::runtime_error("Cannot obtain header, program interrupted");
         }
-        std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], &data[0], bytesRead);
+        std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], data.data(), bytesRead);
         headerOffset += bytesRead;
     } else {
         currentDataOffset += bytesRead;
