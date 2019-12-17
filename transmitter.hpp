@@ -46,7 +46,7 @@ struct ClockRegisters;
 class Transmitter
 {
     public:
-        virtual ~Transmitter();
+        ~Transmitter();
         Transmitter(const Transmitter &) = delete;
         Transmitter(Transmitter &&) = delete;
         Transmitter &operator=(const Transmitter &) = delete;
