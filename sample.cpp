@@ -56,17 +56,3 @@ float Sample::getMonoValue() const
 {
     return value;
 }
-
-#ifndef NO_PREEMP
-PreEmphasis::PreEmphasis(uint32_t sampleRate)
-    : timeConst(sampleRate * 75.0e-6f), prevValue(0.f)
-{
-}
-
-float PreEmphasis::filter(float value)
-{
-    value = value + (prevValue - value) / (1.f - timeConst);
-    prevValue = value;
-    return value;
-}
-#endif

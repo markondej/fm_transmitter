@@ -45,15 +45,4 @@ class Sample
         float value;
 };
 
-#ifndef NO_PREEMP
-class PreEmphasis
-{
-    public:
-        PreEmphasis(uint32_t sampleRate);
-        float filter(float value);
-    protected:
-        float timeConst, prevValue;
-};
-#endif
-
 #endif // SAMPLE_HPP

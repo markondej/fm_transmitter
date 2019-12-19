@@ -46,7 +46,7 @@ struct ClockRegisters;
 class Transmitter
 {
     public:
-        virtual ~Transmitter();
+        ~Transmitter();
         Transmitter(const Transmitter &) = delete;
         Transmitter(Transmitter &&) = delete;
         Transmitter &operator=(const Transmitter &) = delete;
@@ -59,7 +59,7 @@ class Transmitter
         uint32_t getPeripheralsSize() const;
         float getSourceFreq() const;
         uint32_t getPeripheralPhysAddress(volatile void *object) const;
-        static uint32_t getPeripheralVirtAddress(uint32_t offset) const;
+        static uint32_t getPeripheralVirtAddress(uint32_t offset);
         uint32_t getMemoryPhysAddress(AllocatedMemory &memory, volatile void *object) const;
         AllocatedMemory allocateMemory(uint32_t size);
         void freeMemory(AllocatedMemory &memory);

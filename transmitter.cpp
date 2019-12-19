@@ -174,7 +174,7 @@ uint32_t Transmitter::getPeripheralPhysAddress(volatile void *object) const
     return PERIPHERALS_PHYS_BASE + (reinterpret_cast<uint32_t>(object) - reinterpret_cast<uint32_t>(peripherals));
 }
 
-uint32_t Transmitter::getPeripheralVirtAddress(uint32_t offset) const
+uint32_t Transmitter::getPeripheralVirtAddress(uint32_t offset)
 {
     return reinterpret_cast<uint32_t>(peripherals) + offset;
 }
@@ -379,18 +379,12 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
     volatile PWMRegisters *pwm = initPwmController();
 
     uint32_t i, cbOffset = 0;
-#ifndef NO_PREEMP
-    PreEmphasis preEmphasis(sampleRate);
-#endif
 
     volatile DMAControllBlock *dmaCb = reinterpret_cast<DMAControllBlock *>(dmaMemory.virtualBase);
     volatile uint32_t *clkDiv = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(dmaCb) + 2 * sizeof(DMAControllBlock) * bufferSize);
     volatile uint32_t *pwmFifoData = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(clkDiv) + sizeof(uint32_t) * bufferSize);
     for (i = 0; i < bufferSize; i++) {
         float value = samples[i].getMonoValue();
-#ifndef NO_PREEMP
-        value = preEmphasis.filter(value);
-#endif
         clkDiv[i] = (0x5A << 24) | (clockDivisor - static_cast<int32_t>(round(value * divisorRange)));
         dmaCb[cbOffset].transferInfo = (0x01 << 26) | (0x01 << 3);
         dmaCb[cbOffset].srcAddress = getMemoryPhysAddress(dmaMemory, &clkDiv[i]);
@@ -437,9 +431,6 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
             eof = samples.size() < bufferSize;
             for (i = 0; i < samples.size(); i++) {
                 float value = samples[i].getMonoValue();
-#ifndef NO_PREEMP
-                value = preEmphasis.filter(value);
-#endif
                 while (i == ((dma->cbAddress - getMemoryPhysAddress(dmaMemory, dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
                     std::this_thread::sleep_for(std::chrono::microseconds(1000));
                 }
@@ -456,10 +447,6 @@ void Transmitter::transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_
 
 void Transmitter::transmitThread()
 {
-#ifndef NO_PREEMP
-    PreEmphasis preEmphasis(sampleRate);
-#endif
-
     volatile TimerRegisters *timer = reinterpret_cast<TimerRegisters *>(getPeripheralVirtAddress(TIMER_BASE_OFFSET));
     uint64_t current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
     uint64_t playbackStart = current;
@@ -483,7 +470,7 @@ void Transmitter::transmitThread()
             unlock();
             break;
         }
-        std::vector<Sample> loaded(std::move(samples));
+        std::vector<Sample> loaded = std::move(samples);
         unlock();
 
         sampleOffset = (current - playbackStart) * sampleRate / 1000000;
@@ -495,9 +482,6 @@ void Transmitter::transmitThread()
             }
             uint32_t prevOffset = offset;
             float value = loaded[offset].getMonoValue();
-#ifndef NO_PREEMP
-            value = preEmphasis.filter(value);
-#endif
             output->div = (0x5A << 24) | (clockDivisor - static_cast<int32_t>(round(value * divisorRange)));
             while (offset == prevOffset) {
                 std::this_thread::sleep_for(std::chrono::microseconds(1)); // asm("nop");
