@@ -38,7 +38,7 @@ sox my-audio.mp3 -r 22050 -c 1 -b 16 -t wav my-converted-audio.wav
 sudo ./fm_transmitter -f 100.6 my-converted-audio.wav
 ```
 ### Microphone support
-In order to use a microphone input use the `arecord command`, eg.:
+In order to use a microphone input use the `arecord` command, eg.:
 ```
 arecord -D hw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
 ```
