@@ -1,7 +1,7 @@
 /*
-    fm_transmitter - use Raspberry Pi as FM transmitter
+    FM Transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2019, Marcin Kondej
+    Copyright (c) 2020, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -34,25 +34,27 @@
 #include "sample.hpp"
 #include <climits>
 
-Sample::Sample(uint8_t *data, uint16_t channels, uint16_t bitsPerChannel)
+Sample::Sample(uint8_t *data, unsigned channels, unsigned bitsPerChannel)
     : value(0.f)
 {
-    int32_t sum = 0;
+    int sum = 0;
     int16_t *channelValues = new int16_t[channels];
-    int16_t multiplier = bitsPerChannel >> 3;
-    for (uint32_t i = 0; i < channels; i++) {
-        if (multiplier > 1) {
-            channelValues[i] = (data[(i + 1) * multiplier - 1] << 8) | data[(i + 1) * multiplier - 2];
-        } else {
+    for (unsigned i = 0; i < channels; i++) {
+        switch (bitsPerChannel >> 3) {
+        case 2:
+            channelValues[i] = (data[((i + 1) << 1) - 1] << 8) | data[((i + 1) << 1) - 2];
+            break;
+        case 1:
             channelValues[i] = (static_cast<int16_t>(data[i]) - 0x80) << 8;
+            break;
         }
         sum += channelValues[i];
     }
-    value = 2 * sum / channels / static_cast<float>(USHRT_MAX);
+    value = 2 * sum / (static_cast<float>(USHRT_MAX) * channels);
     delete[] channelValues;
 }
 
-float Sample::getMonoValue() const
+float Sample::GetMonoValue() const
 {
     return value;
 }
