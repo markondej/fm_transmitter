@@ -155,7 +155,7 @@ std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes
         }
         if (bytesRead < bytesToRead) {
             if (fileDescriptor != STDIN_FILENO) {
-                data.resize(bytes);
+                data.resize(bytesRead);
                 break;
             } else {
                 std::this_thread::sleep_for(std::chrono::microseconds(1));
@@ -170,6 +170,9 @@ std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes
         std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], data.data(), bytesRead);
         headerOffset += bytesRead;
     } else {
+        if (stop) {
+            data.resize(bytesRead);
+        }
         currentDataOffset += bytesRead;
     }
 

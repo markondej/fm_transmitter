@@ -302,7 +302,7 @@ class DMAController : public Device
 };
 
 Transmitter::Transmitter()
-    : output(nullptr), transmitting(false)
+    : output(nullptr), stopped(true)
 {
 }
 
@@ -320,10 +320,10 @@ Transmitter &Transmitter::GetInstance()
 
 void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth, unsigned dmaChannel, bool preserveCarrier)
 {
-    if (transmitting) {
+    if (!stopped) {
         throw std::runtime_error("Cannot play, transmitter already in use");
     }
-    transmitting = true;
+    stopped = false;
 
     WaveHeader header = reader.GetHeader();
     unsigned bufferSize = static_cast<unsigned>(static_cast<unsigned long long>(header.sampleRate) * BUFFER_TIME / 1000000);
@@ -339,7 +339,7 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
         if (!preserveCarrier) {
             delete output;
             output = nullptr;
-            transmitting = false;
+            stopped = true;
         }
     };
     try {
@@ -357,12 +357,12 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
 
 void Transmitter::Stop()
 {
-    transmitting = false;
+    stopped = true;
 }
 
 void Transmitter::TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange)
 {
-    std::vector<Sample> samples = reader.GetSamples(bufferSize, transmitting);
+    std::vector<Sample> samples = reader.GetSamples(bufferSize, stopped);
     if (samples.empty()) {
         return;
     }
@@ -378,14 +378,14 @@ void Transmitter::TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsign
         samples.clear();
     };
     try {
-        while (!eof && transmitting) {
+        while (!eof && !stopped) {
             {
                 std::lock_guard<std::mutex> lock(access);
                 if (samples.empty()) {
                     if (!reader.SetSampleOffset(sampleOffset + bufferSize)) {
                         break;
                     }
-                    samples = reader.GetSamples(bufferSize, transmitting);
+                    samples = reader.GetSamples(bufferSize, stopped);
                     if (samples.empty()) {
                         break;
                     }
@@ -409,7 +409,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
 
     AllocatedMemory allocated(sizeof(uint32_t) * (bufferSize) + sizeof(DMAControllBlock) * (2 * bufferSize) + sizeof(uint32_t));
 
-    std::vector<Sample> samples = reader.GetSamples(bufferSize, transmitting);
+    std::vector<Sample> samples = reader.GetSamples(bufferSize, stopped);
     if (samples.empty()) {
         return;
     }
@@ -461,8 +461,8 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
         samples.clear();
     };
     try {
-        while (!eof && transmitting) {
-            samples = reader.GetSamples(bufferSize, transmitting);
+        while (!eof && !stopped) {
+            samples = reader.GetSamples(bufferSize, stopped);
             if (!samples.size()) {
                 break;
             }
@@ -492,19 +492,20 @@ void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, 
     uint64_t current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
     uint64_t playbackStart = current;
 
-    while (instance->transmitting) {
+    while (true) {
         std::vector<Sample> loadedSamples;
         while (true) {
-            if (instance->transmitting) {
+            {
                 std::lock_guard<std::mutex> lock(instance->access);
+                if (instance->stopped) {
+                    return;
+                }
                 loadedSamples = std::move(*samples);
                 current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
                 if (!loadedSamples.empty()) {
                     *sampleOffset = (current - playbackStart) * sampleRate / 1000000;
                     break;
                 }
-            } else {
-                return;
             }
             std::this_thread::sleep_for(std::chrono::microseconds(1));
         };

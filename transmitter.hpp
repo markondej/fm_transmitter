@@ -56,8 +56,8 @@ class Transmitter
         static void TransmitterThread(Transmitter *instance, ClockOutput *output, unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples);
 
         ClockOutput *output;
-        bool transmitting;
         std::mutex access;
+        bool stopped;
 };
 
 #endif // TRANSMITTER_HPP
