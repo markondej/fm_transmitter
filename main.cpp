@@ -38,11 +38,11 @@
 #include <unistd.h>
 
 bool stop = false;
-Transmitter *transmitter = NULL;
+Transmitter *transmitter = nullptr;
 
 void sigIntHandler(int sigNum)
 {
-    if (transmitter != NULL) {
+    if (transmitter != nullptr) {
         std::cout << "Stopping..." << std::endl;
         transmitter->Stop();
         stop = true;
@@ -87,8 +87,14 @@ int main(int argc, char** argv)
     signal(SIGINT, sigIntHandler);
     signal(SIGTSTP, sigIntHandler);
 
+    auto finally = [&]() {
+        delete transmitter;
+        transmitter = nullptr;
+    };
     try {
-        transmitter = &Transmitter::GetInstance();
+        transmitter = new Transmitter();
+        std::cout << "Broadcasting at " << frequency << " MHz with "
+            << bandwidth << " kHz bandwidth" << std::endl;
         do {
             std::string filename = argv[optind++];
             if ((optind == argc) && loop) {
@@ -96,8 +102,6 @@ int main(int argc, char** argv)
             }
             WaveReader reader(filename != "-" ? filename : std::string(), stop);
             WaveHeader header = reader.GetHeader();
-            std::cout << "Broadcasting at " << frequency << " MHz with "
-                << bandwidth << " kHz bandwidth" << std::endl;
             std::cout << "Playing: " << reader.GetFilename() << ", "
                 << header.sampleRate << " Hz, "
                 << header.bitsPerSample << " bits, "
@@ -106,8 +110,10 @@ int main(int argc, char** argv)
         } while (!stop && (optind < argc));
     } catch (std::exception &catched) {
         std::cout << "Error: " << catched.what() << std::endl;
+        finally();
         return 1;
     }
+    finally();
 
     return 0;
 }

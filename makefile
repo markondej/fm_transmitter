@@ -1,5 +1,5 @@
 EXECUTABLE = fm_transmitter
-VERSION = 0.9.3
+VERSION = 0.9.4
 FLAGS = -Wall -O3 -std=c++11
 
 all: main.o mailbox.o sample.o wave_reader.o transmitter.o

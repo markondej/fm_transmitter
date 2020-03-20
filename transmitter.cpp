@@ -220,7 +220,7 @@ class ClockDevice : public Device
 {
     public:
         ClockDevice(uint32_t clockAddress, unsigned divisor) {
-            clock = reinterpret_cast<ClockRegisters *>(peripherals->GetVirtualAddress(CLK0_BASE_OFFSET));
+            clock = reinterpret_cast<ClockRegisters *>(peripherals->GetVirtualAddress(clockAddress));
             clock->ctl = (0x5a << 24) | 0x06;
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
             clock->div = (0x5a << 24) | (0xffffff & divisor);
@@ -301,6 +301,8 @@ class DMAController : public Device
         volatile DMARegisters *dma;
 };
 
+bool Transmitter::transmitting = false;
+
 Transmitter::Transmitter()
     : output(nullptr), stopped(true)
 {
@@ -312,17 +314,12 @@ Transmitter::~Transmitter() {
     }
 }
 
-Transmitter &Transmitter::GetInstance()
-{
-    static Transmitter instance;
-    return instance;
-}
-
 void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth, unsigned dmaChannel, bool preserveCarrier)
 {
-    if (!stopped) {
-        throw std::runtime_error("Cannot play, transmitter already in use");
+    if (transmitting) {
+        throw std::runtime_error("Cannot transmit, transmitter already in use");
     }
+    transmitting = true;
     stopped = false;
 
     WaveHeader header = reader.GetHeader();
@@ -339,8 +336,8 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
         if (!preserveCarrier) {
             delete output;
             output = nullptr;
-            stopped = true;
         }
+        transmitting = false;
     };
     try {
         if (dmaChannel != 0xff) {
@@ -374,6 +371,7 @@ void Transmitter::TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsign
     std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 2));
 
     auto finally = [&]() {
+		stopped = true;
         transmitterThread.join();
         samples.clear();
     };
@@ -458,6 +456,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
         while (dma.GetControllBlockAddress() != 0x00000000) {
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
         }
+        stopped = true;
         samples.clear();
     };
     try {
