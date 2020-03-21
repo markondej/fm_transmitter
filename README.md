@@ -25,11 +25,16 @@ Other options:
 * -r - Loops the playback
 
 After transmission has begun, simply tune an FM receiver to chosen frequency, You should hear the playback.
+### Raspberry Pi 4
+On Raspberry Pi 4 power saving options probably interfers somehow with this software making transmitting not possible on standard FM broadcasting frequencies. However it is possible to transmit on lower frequencies i.eg. 66MHz. It is recommended to change either ARM core scaling governor settings to "performance" or to change ARM minium and maximum core frequencies to one constant value (see: https://www.raspberrypi.org/forums/viewtopic.php?t=152692 ).
+```
+echo "performance"| sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+```
 ### Supported audio formats
 You can transmitt uncompressed WAV (.wav) files directly or read audio data from stdin, eg.:
 ```
 sudo apt-get install sox
-sox star_wars.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
+sox acoustic_guitar_duet.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
 ```
 Please note only uncompressed WAV files are supported. If you receive the "corrupted data" error try converting the file, eg. by using SoX:
 ```
