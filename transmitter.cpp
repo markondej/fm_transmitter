@@ -46,6 +46,7 @@
 #define DMA0_BASE_OFFSET 0x00007000
 #define DMA15_BASE_OFFSET 0x00e05000
 #define CLK0_BASE_OFFSET 0x00101070
+#define CLK1_BASE_OFFSET 0x00101078
 #define PWMCLK_BASE_OFFSET 0x001010a0
 #define GPIO_BASE_OFFSET 0x00200000
 #define PWM_BASE_OFFSET 0x0020c000
@@ -236,12 +237,22 @@ class ClockDevice : public Device
 class ClockOutput : public ClockDevice
 {
     public:
+#ifndef GPIO21
         ClockOutput(unsigned divisor) : ClockDevice(CLK0_BASE_OFFSET, divisor) {
             output = reinterpret_cast<uint32_t *>(peripherals->GetVirtualAddress(GPIO_BASE_OFFSET));
             *output = (*output & 0xffff8fff) | (0x04 << 12);
+#else
+        ClockOutput(unsigned divisor) : ClockDevice(CLK1_BASE_OFFSET, divisor) {
+            output = reinterpret_cast<uint32_t *>(peripherals->GetVirtualAddress(GPIO_BASE_OFFSET + 0x08));
+            *output = (*output & 0xffffffc7) | (0x02 << 3);
+#endif
         }
         virtual ~ClockOutput() {
+#ifndef GPIO21
             *output = (*output & 0xffff8fff) | (0x01 << 12);
+#else
+            *output = (*output & 0xffffffc7) | (0x02 << 3);
+#endif
         }
         inline void SetDivisor(unsigned divisor) {
             clock->div = (0x5a << 24) | (0xffffff & divisor);

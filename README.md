@@ -21,15 +21,21 @@ Where:
 
 Other options:
 * -d dma_channel - Specifies the DMA channel to be used (0 by default), type 255 to disable DMA transfer, CPU will be used instead
-* -b bandwidth - Specifies the bandwidth in kHz, 200 by default
+* -b bandwidth - Specifies the bandwidth in kHz, 100 by default
 * -r - Loops the playback
 
 After transmission has begun, simply tune an FM receiver to chosen frequency, You should hear the playback.
 ### Raspberry Pi 4
-On Raspberry Pi 4 power saving options probably interfers somehow with this software making transmitting not possible on standard FM broadcasting frequencies. However it is possible to transmit on lower frequencies i.eg. 66MHz. It is recommended to change either ARM core scaling governor settings to "performance" or to change ARM minium and maximum core frequencies to one constant value (see: https://www.raspberrypi.org/forums/viewtopic.php?t=152692 ).
+On Raspberry Pi 4 other built-in hardware probably interfers somehow with this software making transmitting not possible on all standard FM broadcasting frequencies. In this case it is recommended to:
+1. Compile executable with option to use GPIO21 instead of GPIO4 (PIN 40 on GPIO header):
+```
+make GPIO21=1
+```
+2. Change either ARM core frequency scaling governor settings to "performance" or to change ARM minium and maximum core frequencies to one constant value (see: https://www.raspberrypi.org/forums/viewtopic.php?t=152692 ).
 ```
 echo "performance"| sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 ```
+3. Using lower FM broadcasting frequencies (below 93 MHz) when transmitting.
 ### Supported audio formats
 You can transmitt uncompressed WAV (.wav) files directly or read audio data from stdin, eg.:
 ```
