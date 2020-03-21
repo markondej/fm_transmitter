@@ -51,7 +51,7 @@ void sigIntHandler(int sigNum)
 
 int main(int argc, char** argv)
 {
-    float frequency = 100.f, bandwidth = 100.f;
+    float frequency = 100.f, bandwidth = 200.f;
     uint16_t dmaChannel = 0;
     bool showUsage = true, loop = false;
     int opt, filesOffset;
