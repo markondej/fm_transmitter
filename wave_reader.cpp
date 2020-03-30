@@ -1,7 +1,7 @@
 /*
-    fm_transmitter - use Raspberry Pi as FM transmitter
+    FM Transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2019, Marcin Kondej
+    Copyright (c) 2020, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -39,7 +39,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-WaveReader::WaveReader(const std::string &filename, bool &continueFlag) :
+WaveReader::WaveReader(const std::string &filename, bool &stop) :
     filename(filename), headerOffset(0), currentDataOffset(0)
 {
     if (!filename.empty()) {
@@ -50,34 +50,34 @@ WaveReader::WaveReader(const std::string &filename, bool &continueFlag) :
     }
 
     if (fileDescriptor == -1) {
-        throw std::runtime_error(std::string("Cannot open ") + getFilename() + std::string(", file does not exist"));
+        throw std::runtime_error(std::string("Cannot open ") + GetFilename() + std::string(", file does not exist"));
     }
 
     try {
-        readData(sizeof(PCMWaveHeader::chunkID) + sizeof(PCMWaveHeader::chunkSize) + sizeof(PCMWaveHeader::format), true, continueFlag);
+        ReadData(sizeof(WaveHeader::chunkID) + sizeof(WaveHeader::chunkSize) + sizeof(WaveHeader::format), true, stop);
         if ((std::string(reinterpret_cast<char *>(header.chunkID), 4) != std::string("RIFF")) || (std::string(reinterpret_cast<char *>(header.format), 4) != std::string("WAVE"))) {
-            throw std::runtime_error(std::string("Error while opening ") + getFilename() + std::string(", WAVE file expected"));
+            throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", WAVE file expected"));
         }
 
-        readData(sizeof(PCMWaveHeader::subchunk1ID) + sizeof(PCMWaveHeader::subchunk1Size), true, continueFlag);
-        uint32_t subchunk1MinSize = sizeof(PCMWaveHeader::audioFormat) + sizeof(PCMWaveHeader::channels) +
-            sizeof(PCMWaveHeader::sampleRate) + sizeof(PCMWaveHeader::byteRate) + sizeof(PCMWaveHeader::blockAlign) +
-            sizeof(PCMWaveHeader::bitsPerSample);
+        ReadData(sizeof(WaveHeader::subchunk1ID) + sizeof(WaveHeader::subchunk1Size), true, stop);
+        unsigned subchunk1MinSize = sizeof(WaveHeader::audioFormat) + sizeof(WaveHeader::channels) +
+            sizeof(WaveHeader::sampleRate) + sizeof(WaveHeader::byteRate) + sizeof(WaveHeader::blockAlign) +
+            sizeof(WaveHeader::bitsPerSample);
         if ((std::string(reinterpret_cast<char *>(header.subchunk1ID), 4) != std::string("fmt ")) || (header.subchunk1Size < subchunk1MinSize)) {
-            throw std::runtime_error(std::string("Error while opening ") + getFilename() + std::string(", data corrupted"));
+            throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", data corrupted"));
         }
 
-        readData(header.subchunk1Size, true, continueFlag);
+        ReadData(header.subchunk1Size, true, stop);
         if ((header.audioFormat != WAVE_FORMAT_PCM) ||
             (header.byteRate != (header.bitsPerSample >> 3) * header.channels * header.sampleRate) ||
             (header.blockAlign != (header.bitsPerSample >> 3) * header.channels) ||
             (((header.bitsPerSample >> 3) != 1) && ((header.bitsPerSample >> 3) != 2))) {
-            throw std::runtime_error(std::string("Error while opening ") + getFilename() + std::string(", unsupported WAVE format"));
+            throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", unsupported WAVE format"));
         }
 
-        readData(sizeof(PCMWaveHeader::subchunk2ID) + sizeof(PCMWaveHeader::subchunk2Size), true, continueFlag);
+        ReadData(sizeof(WaveHeader::subchunk2ID) + sizeof(WaveHeader::subchunk2Size), true, stop);
         if (std::string(reinterpret_cast<char *>(header.subchunk2ID), 4) != std::string("data")) {
-            throw std::runtime_error(std::string("Error while opening ") + getFilename() + std::string(", data corrupted"));
+            throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", data corrupted"));
         }
     } catch (...) {
         if (fileDescriptor != STDIN_FILENO) {
@@ -98,65 +98,38 @@ WaveReader::~WaveReader()
     }
 }
 
-std::vector<uint8_t> WaveReader::readData(uint32_t bytesToRead, bool headerBytes, bool &continueFlag)
+std::string WaveReader::GetFilename() const
 {
-    uint32_t bytesRead = 0;
-    std::vector<uint8_t> data;
-    data.resize(bytesToRead);
-    while ((bytesRead < bytesToRead) && continueFlag) {
-        int bytes = read(fileDescriptor, &data[bytesRead], bytesToRead - bytesRead);
-        if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
-            ((static_cast<uint32_t>(bytes) < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
-            throw std::runtime_error(std::string("Error while opening ") + getFilename() + std::string(", data corrupted"));
-        }
-        if (bytes > 0) {
-            bytesRead += bytes;
-        }
-        if (bytesRead < bytesToRead) {
-            if (fileDescriptor != STDIN_FILENO) {
-                data.resize(bytes);
-                break;
-            } else {
-                std::this_thread::sleep_for(std::chrono::microseconds(1));
-            }
-        }
-    }
-
-    if (headerBytes) {
-        if (!continueFlag) {
-            throw std::runtime_error("Cannot obtain header, program interrupted");
-        }
-        std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], data.data(), bytesRead);
-        headerOffset += bytesRead;
-    } else {
-        currentDataOffset += bytesRead;
-    }
-
-    return data;
+    return fileDescriptor != STDIN_FILENO ? filename : "STDIN";
 }
 
-std::vector<Sample> WaveReader::getSamples(uint32_t quantity, bool &continueFlag) {
-    uint32_t bytesPerSample = (header.bitsPerSample >> 3) * header.channels;
-    uint32_t bytesToRead = quantity * bytesPerSample;
-    uint32_t bytesLeft = header.subchunk2Size - currentDataOffset;
+const WaveHeader &WaveReader::GetHeader() const
+{
+    return header;
+}
+
+std::vector<Sample> WaveReader::GetSamples(unsigned quantity, bool &stop) {
+    unsigned bytesPerSample = (header.bitsPerSample >> 3) * header.channels;
+    unsigned bytesToRead = quantity * bytesPerSample;
+    unsigned bytesLeft = header.subchunk2Size - currentDataOffset;
     if (bytesToRead > bytesLeft) {
         bytesToRead = bytesLeft - bytesLeft % bytesPerSample;
         quantity = bytesToRead / bytesPerSample;
     }
 
-    std::vector<uint8_t> data = std::move(readData(bytesToRead, false, continueFlag));
+    std::vector<uint8_t> data = std::move(ReadData(bytesToRead, false, stop));
     if (data.size() < bytesToRead) {
         quantity = data.size() / bytesPerSample;
     }
 
     std::vector<Sample> samples;
-    for (uint32_t i = 0; i < quantity; i++) {
+    for (unsigned i = 0; i < quantity; i++) {
         samples.push_back(Sample(&data[bytesPerSample * i], header.channels, header.bitsPerSample));
     }
     return samples;
 }
 
-bool WaveReader::setSampleOffset(uint32_t offset) {
+bool WaveReader::SetSampleOffset(unsigned offset) {
     if (fileDescriptor != STDIN_FILENO) {
         currentDataOffset = offset * (header.bitsPerSample >> 3) * header.channels;
         if (lseek(fileDescriptor, dataOffset + currentDataOffset, SEEK_SET) == -1) {
@@ -166,12 +139,42 @@ bool WaveReader::setSampleOffset(uint32_t offset) {
     return true;
 }
 
-std::string WaveReader::getFilename() const
+std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes, bool &stop)
 {
-    return fileDescriptor != STDIN_FILENO ? filename : "STDIN";
-}
+    unsigned bytesRead = 0;
+    std::vector<uint8_t> data;
+    data.resize(bytesToRead);
+    while ((bytesRead < bytesToRead) && !stop) {
+        int bytes = read(fileDescriptor, &data[bytesRead], bytesToRead - bytesRead);
+        if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
+            ((static_cast<unsigned>(bytes) < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
+            throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", data corrupted"));
+        }
+        if (bytes > 0) {
+            bytesRead += bytes;
+        }
+        if (bytesRead < bytesToRead) {
+            if (fileDescriptor != STDIN_FILENO) {
+                data.resize(bytesRead);
+                break;
+            } else {
+                std::this_thread::sleep_for(std::chrono::microseconds(1));
+            }
+        }
+    }
 
-PCMWaveHeader WaveReader::getHeader() const
-{
-    return header;
+    if (headerBytes) {
+        if (stop) {
+            throw std::runtime_error("Cannot obtain header, program interrupted");
+        }
+        std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], data.data(), bytesRead);
+        headerOffset += bytesRead;
+    } else {
+        if (stop) {
+            data.resize(bytesRead);
+        }
+        currentDataOffset += bytesRead;
+    }
+
+    return data;
 }

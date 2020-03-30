@@ -1,7 +1,7 @@
 /*
-    fm_transmitter - use Raspberry Pi as FM transmitter
+    FM Transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2019, Marcin Kondej
+    Copyright (c) 2020, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -37,50 +37,27 @@
 #include "wave_reader.hpp"
 #include <mutex>
 
-struct AllocatedMemory;
-struct PWMRegisters;
-struct DMARegisters;
-struct DMAControllBlock;
-struct ClockRegisters;
+class ClockOutput;
 
 class Transmitter
 {
     public:
-        ~Transmitter();
+        Transmitter();
+        virtual ~Transmitter();
         Transmitter(const Transmitter &) = delete;
         Transmitter(Transmitter &&) = delete;
         Transmitter &operator=(const Transmitter &) = delete;
-        static Transmitter &getInstance();
-        void transmit(WaveReader &reader, float frequency, float bandwidth, uint8_t dmaChannel, bool preserveCarrierOnExit);
-        void stop();
+        void Transmit(WaveReader &reader, float frequency, float bandwidth, unsigned dmaChannel, bool preserveCarrier);
+        void Stop();
     private:
-        Transmitter();
-        uint32_t getPeripheralsVirtBaseAddress() const;
-        uint32_t getPeripheralsSize() const;
-        float getSourceFreq() const;
-        uint32_t getPeripheralPhysAddress(volatile void *object) const;
-        static uint32_t getPeripheralVirtAddress(uint32_t offset);
-        uint32_t getMemoryPhysAddress(AllocatedMemory &memory, volatile void *object) const;
-        AllocatedMemory allocateMemory(uint32_t size);
-        void freeMemory(AllocatedMemory &memory);
-        volatile PWMRegisters *initPwmController();
-        void closePwmController(volatile PWMRegisters *pwm);
-        volatile DMARegisters *startDma(AllocatedMemory &memory, volatile DMAControllBlock *dmaCb, uint8_t dmaChannel);
-        void closeDma(volatile DMARegisters *dma);
-        volatile ClockRegisters *initClockOutput();
-        void closeClockOutput(volatile ClockRegisters *clock);
-        void transmitViaCpu(WaveReader &reader, uint32_t bufferSize);
-        void transmitViaDma(WaveReader &reader, uint32_t bufferSize, uint8_t dmaChannel);
-        static void transmitThread();
+        void TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange);
+        void TransmitViaDma(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange, unsigned dmaChannel);
+        static void TransmitterThread(Transmitter *instance, ClockOutput *output, unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples);
 
-        bool preserveCarrier;
-
-        static void *peripherals;
         static bool transmitting;
-        static uint32_t sampleOffset, clockDivisor, divisorRange, sampleRate;
-        static volatile ClockRegisters *output;
-        static std::vector<Sample> samples;
-        static std::mutex samplesMutex;
+        ClockOutput *output;
+        std::mutex access;
+        bool stopped;
 };
 
 #endif // TRANSMITTER_HPP

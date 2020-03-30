@@ -1,7 +1,7 @@
 /*
-    fm_transmitter - use Raspberry Pi as FM transmitter
+    FM Transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2019, Marcin Kondej
+    Copyright (c) 2020, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -37,21 +37,21 @@
 #include <iostream>
 #include <unistd.h>
 
-bool play = true;
-Transmitter *transmitter = NULL;
+bool stop = false;
+Transmitter *transmitter = nullptr;
 
 void sigIntHandler(int sigNum)
 {
-    if (transmitter != NULL) {
+    if (transmitter != nullptr) {
         std::cout << "Stopping..." << std::endl;
-        transmitter->stop();
-        play = false;
+        transmitter->Stop();
+        stop = true;
     }
 }
 
 int main(int argc, char** argv)
 {
-    float frequency = 100.f, bandwidth = 100.f;
+    float frequency = 100.f, bandwidth = 200.f;
     uint16_t dmaChannel = 0;
     bool showUsage = true, loop = false;
     int opt, filesOffset;
@@ -87,27 +87,33 @@ int main(int argc, char** argv)
     signal(SIGINT, sigIntHandler);
     signal(SIGTSTP, sigIntHandler);
 
+    auto finally = [&]() {
+        delete transmitter;
+        transmitter = nullptr;
+    };
     try {
-        transmitter = &Transmitter::getInstance();
+        transmitter = new Transmitter();
+        std::cout << "Broadcasting at " << frequency << " MHz with "
+            << bandwidth << " kHz bandwidth" << std::endl;
         do {
             std::string filename = argv[optind++];
             if ((optind == argc) && loop) {
                 optind = filesOffset;
             }
-            WaveReader reader(filename != "-" ? filename : std::string(), play);
-            PCMWaveHeader header = reader.getHeader();
-            std::cout << "Broadcasting at " << frequency << " MHz with " 
-                << bandwidth << " kHz bandwidth" << std::endl;
-            std::cout << "Playing: " << reader.getFilename() << ", "
+            WaveReader reader(filename != "-" ? filename : std::string(), stop);
+            WaveHeader header = reader.GetHeader();
+            std::cout << "Playing: " << reader.GetFilename() << ", "
                 << header.sampleRate << " Hz, "
                 << header.bitsPerSample << " bits, "
                 << ((header.channels > 0x01) ? "stereo" : "mono") << std::endl;
-            transmitter->transmit(reader, frequency, bandwidth, dmaChannel, optind < argc);
-        } while (play && (optind < argc));
+            transmitter->Transmit(reader, frequency, bandwidth, dmaChannel, optind < argc);
+        } while (!stop && (optind < argc));
     } catch (std::exception &catched) {
         std::cout << "Error: " << catched.what() << std::endl;
+        finally();
         return 1;
     }
+    finally();
 
     return 0;
 }
