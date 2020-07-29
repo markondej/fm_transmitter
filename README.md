@@ -1,7 +1,7 @@
 # FM Transmitter
 Use the Raspberry Pi as an FM transmitter. Works on every Raspberry Pi board.
 
-Just get an FM receiver, connect a 20 - 40 cm plain wire to the Raspberry Pi's GPIO4 (PIN 7 on GPIO header) to act as an antena, and you are ready for broadcasting.
+Just get an FM receiver, connect a 20 - 40 cm plain wire to the Raspberry Pi's GPIO4 (PIN 7 on GPIO header) to act as an antenna, and you are ready for broadcasting.
 
 This project uses the general clock output to produce frequency modulated radio communication. It is based on an idea originally presented by [Oliver Mattos and Oskar Weigl](http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter) at [PiFM project](http://icrobotics.co.uk/wiki/index.php/Turning_the_Raspberry_Pi_Into_an_FM_Transmitter).
 ## How to use it
@@ -31,7 +31,7 @@ On Raspberry Pi 4 other built-in hardware probably interfers somehow with this s
 ```
 make GPIO21=1
 ```
-2. Change either ARM core frequency scaling governor settings to "performance" or to change ARM minium and maximum core frequencies to one constant value (see: https://www.raspberrypi.org/forums/viewtopic.php?t=152692 ).
+2. Change either ARM core frequency scaling governor settings to "performance" or to change ARM minimum and maximum core frequencies to one constant value (see: https://www.raspberrypi.org/forums/viewtopic.php?t=152692 ).
 ```
 echo "performance"| sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 ```
