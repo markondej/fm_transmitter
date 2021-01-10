@@ -42,7 +42,12 @@ You can transmitt uncompressed WAV (.wav) files directly or read audio data from
 sudo apt-get install sox
 sox acoustic_guitar_duet.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
 ```
-Please note only uncompressed WAV files are supported. If you receive the "corrupted data" error try converting the file, eg. by using SoX:
+Please note only uncompressed WAV files are supported. If you receive the "corrupted data" error try converting the file, eg. by using FFMPEG:
+```
+ffmpeg -i not_wav_song.webm -f wav -bitexact -acodec pcm_s16le -ar 22050 -ac 1 song.wav
+sudo ./fm_transmitter -f 100.6 song.wav
+```
+Or you could also use SoX:
 ```
 sudo apt-get install sox libsox-fmt-mp3
 sox my-audio.mp3 -r 22050 -c 1 -b 16 -t wav my-converted-audio.wav
