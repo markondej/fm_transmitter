@@ -1,7 +1,7 @@
 /*
     FM Transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2020, Marcin Kondej
+    Copyright (c) 2021, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter

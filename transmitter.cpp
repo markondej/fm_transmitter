@@ -1,7 +1,7 @@
 /*
     FM Transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2020, Marcin Kondej
+    Copyright (c) 2021, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -127,13 +127,13 @@ class Peripherals
             static Peripherals instance;
             return instance;
         }
-        inline uint32_t GetPhysicalAddress(volatile void *object) const {
-            return PERIPHERALS_PHYS_BASE + (reinterpret_cast<uint32_t>(object) - reinterpret_cast<uint32_t>(peripherals));
+        inline uintptr_t GetPhysicalAddress(volatile void *object) const {
+            return PERIPHERALS_PHYS_BASE + (reinterpret_cast<uintptr_t>(object) - reinterpret_cast<uintptr_t>(peripherals));
         }
-        inline uint32_t GetVirtualAddress(uint32_t offset) const {
-            return reinterpret_cast<uint32_t>(peripherals) + offset;
+        inline uintptr_t GetVirtualAddress(uintptr_t offset) const {
+            return reinterpret_cast<uintptr_t>(peripherals) + offset;
         }
-        inline static uint32_t GetVirtualBaseAddress() {
+        inline static uintptr_t GetVirtualBaseAddress() {
             return (bcm_host_get_peripheral_size() == BCM2838_PERI_VIRT_BASE) ? BCM2838_PERI_VIRT_BASE : bcm_host_get_peripheral_address();
         }
         inline static float GetClockFrequency() {
@@ -191,15 +191,15 @@ class AllocatedMemory
         AllocatedMemory(const AllocatedMemory &) = delete;
         AllocatedMemory(AllocatedMemory &&) = delete;
         AllocatedMemory &operator=(const AllocatedMemory &) = delete;
-        inline uint32_t GetPhysicalAddress(volatile void *object) const {
-            return (memSize) ? memAddress + (reinterpret_cast<uint32_t>(object) - reinterpret_cast<uint32_t>(memAllocated)) : 0x00000000;
+        inline uintptr_t GetPhysicalAddress(volatile void *object) const {
+            return (memSize) ? memAddress + (reinterpret_cast<uintptr_t>(object) - reinterpret_cast<uintptr_t>(memAllocated)) : 0x00000000;
         }
-        inline uint32_t GetAddress() const {
-            return reinterpret_cast<uint32_t>(memAllocated);
+        inline uintptr_t GetVirtualAddress() const {
+            return reinterpret_cast<uintptr_t>(memAllocated);
         }
     private:
         unsigned memSize, memHandle;
-        uint32_t memAddress;
+        uintptr_t memAddress;
         void *memAllocated;
         int mBoxFd;
 };
@@ -220,7 +220,7 @@ class Device
 class ClockDevice : public Device
 {
     public:
-        ClockDevice(uint32_t clockAddress, unsigned divisor) {
+        ClockDevice(uintptr_t clockAddress, unsigned divisor) {
             clock = reinterpret_cast<ClockRegisters *>(peripherals->GetVirtualAddress(clockAddress));
             clock->ctl = (0x5a << 24) | 0x06;
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
@@ -416,7 +416,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
         throw std::runtime_error("DMA channel number out of range (0 - 15)");
     }
 
-    AllocatedMemory allocated(sizeof(uint32_t) * (bufferSize) + sizeof(DMAControllBlock) * (2 * bufferSize) + sizeof(uint32_t));
+    AllocatedMemory allocated(sizeof(uint32_t) * bufferSize + sizeof(DMAControllBlock) * (2 * bufferSize) + sizeof(uint32_t));
 
     std::vector<Sample> samples = reader.GetSamples(bufferSize, stopped);
     if (samples.empty()) {
@@ -434,12 +434,12 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
 
     unsigned i, cbOffset = 0;
 
-    volatile DMAControllBlock *dmaCb = reinterpret_cast<DMAControllBlock *>(allocated.GetAddress());
-    volatile uint32_t *clkDiv = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(dmaCb) + 2 * sizeof(DMAControllBlock) * bufferSize);
-    volatile uint32_t *pwmFifoData = reinterpret_cast<uint32_t *>(reinterpret_cast<uint32_t>(clkDiv) + sizeof(uint32_t) * bufferSize);
+    volatile DMAControllBlock *dmaCb = reinterpret_cast<DMAControllBlock *>(allocated.GetVirtualAddress());
+    volatile uint32_t *clkDiv = reinterpret_cast<uint32_t *>(reinterpret_cast<uintptr_t>(dmaCb) + 2 * sizeof(DMAControllBlock) * bufferSize);
+    volatile uint32_t *pwmFifoData = reinterpret_cast<uint32_t *>(reinterpret_cast<uintptr_t>(clkDiv) + sizeof(uint32_t) * bufferSize);
     for (i = 0; i < bufferSize; i++) {
         float value = samples[i].GetMonoValue();
-        clkDiv[i] = (0x5a << 24) | (0xffffff & (clockDivisor - static_cast<int>(round(value * divisorRange))));
+        clkDiv[i] = (0x5a << 24) | (0xffffff & (clockDivisor - static_cast<int32_t>(round(value * divisorRange))));
         dmaCb[cbOffset].transferInfo = (0x01 << 26) | (0x01 << 3);
         dmaCb[cbOffset].srcAddress = allocated.GetPhysicalAddress(&clkDiv[i]);
         dmaCb[cbOffset].dstAddress = peripherals.GetPhysicalAddress(&output.GetDivisor());
