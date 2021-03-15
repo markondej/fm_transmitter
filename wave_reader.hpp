@@ -1,7 +1,7 @@
 /*
-    fm_transmitter - use Raspberry Pi as FM transmitter
+    FM Transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2019, Marcin Kondej
+    Copyright (c) 2021, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -34,29 +34,47 @@
 #ifndef WAVE_READER_HPP
 #define WAVE_READER_HPP
 
-#include "pcm_wave_header.hpp"
 #include "sample.hpp"
 #include <string>
 #include <vector>
 
+#define WAVE_FORMAT_PCM 0x0001
+
+struct WaveHeader
+{
+    uint8_t chunkID[4];
+    uint32_t chunkSize;
+    uint8_t format[4];
+    uint8_t subchunk1ID[4];
+    uint32_t subchunk1Size;
+    uint16_t audioFormat;
+    uint16_t channels;
+    uint32_t sampleRate;
+    uint32_t byteRate;
+    uint16_t blockAlign;
+    uint16_t bitsPerSample;
+    uint8_t subchunk2ID[4];
+    uint32_t subchunk2Size;
+};
+
 class WaveReader
 {
     public:
-        WaveReader(std::string filename, bool &continueFlag);
+        WaveReader(const std::string &filename, bool &stop);
         virtual ~WaveReader();
         WaveReader(const WaveReader &) = delete;
         WaveReader(WaveReader &&) = delete;
         WaveReader &operator=(const WaveReader &) = delete;
-        std::string getFilename();
-        PCMWaveHeader getHeader();
-        std::vector<Sample> getSamples(uint32_t quantity, bool &continueFlag);
-        bool setSampleOffset(uint32_t offset);
+        std::string GetFilename() const;
+        const WaveHeader &GetHeader() const;
+        std::vector<Sample> GetSamples(unsigned quantity, bool &stop);
+        bool SetSampleOffset(unsigned offset);
     private:
-        std::vector<uint8_t> readData(uint32_t bytesToRead, bool headerBytes, bool &continueFlag);
+        std::vector<uint8_t> ReadData(unsigned bytesToRead, bool headerBytes, bool &stop);
 
         std::string filename;
-        PCMWaveHeader header;
-        uint32_t dataOffset, headerOffset, currentDataOffset;
+        WaveHeader header;
+        unsigned dataOffset, headerOffset, currentDataOffset;
         int fileDescriptor;
 };
 

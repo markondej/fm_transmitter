@@ -1,7 +1,7 @@
 /*
-    fm_transmitter - use Raspberry Pi as FM transmitter
+    FM Transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2019, Marcin Kondej
+    Copyright (c) 2021, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -39,21 +39,10 @@
 class Sample
 {
     public:
-        Sample(uint8_t *data, uint16_t channels, uint16_t bitsPerChannel);
-        float getMonoValue();
+        Sample(uint8_t *data, unsigned channels, unsigned bitsPerChannel);
+        float GetMonoValue() const;
     protected:
         float value;
 };
-
-#ifndef NO_PREEMP
-class PreEmphasis
-{
-    public:
-        PreEmphasis(uint32_t sampleRate);
-        float filter(float value);
-    protected:
-        float timeConst, prevValue;
-};
-#endif
 
 #endif // SAMPLE_HPP
