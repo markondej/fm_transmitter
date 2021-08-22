@@ -46,21 +46,21 @@ echo "performance"| sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_govern
 ```
 3. Using lower FM broadcasting frequencies (below 93 MHz) when transmitting.
 ### Supported audio formats
-You can transmitt uncompressed WAV (.wav) files directly or read audio data from stdin, eg.:
-```
-sudo apt-get install sox
-sox acoustic_guitar_duet.wav -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
-```
-Please note only uncompressed WAV files are supported. If you receive the "corrupted data" error try converting the file, eg. by using FFMPEG:
-```
-ffmpeg -i not_wav_song.webm -f wav -bitexact -acodec pcm_s16le -ar 22050 -ac 1 song.wav
-sudo ./fm_transmitter -f 100.6 song.wav
-```
-Or you could also use SoX:
+You can transmitt uncompressed WAV (.wav) files directly or read audio data from stdin, eg. using MP3 file:
 ```
 sudo apt-get install sox libsox-fmt-mp3
-sox my-audio.mp3 -r 22050 -c 1 -b 16 -t wav my-converted-audio.wav
-sudo ./fm_transmitter -f 100.6 my-converted-audio.wav
+sox example.mp3 -r 22050 -c 1 -b 16 -t wav - | sudo ./fm_transmitter -f 100.6 -
+```
+Please note only uncompressed WAV files are supported. If you receive the "corrupted data" error try converting the file, eg. by using SoX:
+```
+sudo apt-get install sox libsox-fmt-mp3
+sox example.mp3 -r 22050 -c 1 -b 16 -t wav converted-example.wav
+sudo ./fm_transmitter -f 100.6 converted-example.wav
+```
+Or you could also use FFMPEG:
+```
+ffmpeg -i example.webm -f wav -bitexact -acodec pcm_s16le -ar 22050 -ac 1 converted-example.wav
+sudo ./fm_transmitter -f 100.6 converted-example.wav
 ```
 ### Microphone support
 In order to use a microphone live input use the `arecord` command, eg.:

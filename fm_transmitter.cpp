@@ -32,9 +32,8 @@
 */
 
 #include "transmitter.hpp"
-#include <cstdlib>
-#include <csignal>
 #include <iostream>
+#include <csignal>
 #include <unistd.h>
 
 bool stop = false;
@@ -62,13 +61,13 @@ int main(int argc, char** argv)
                 loop = true;
                 break;
             case 'f':
-                frequency = ::atof(optarg);
+                frequency = std::stof(optarg);
                 break;
             case 'd':
-                dmaChannel = ::atof(optarg);
+                dmaChannel = std::stoi(optarg);
                 break;
             case 'b':
-                bandwidth = ::atof(optarg);
+                bandwidth = std::stof(optarg);
                 break;
             case 'v':
                 std::cout << EXECUTABLE << " version: " << VERSION << std::endl;
