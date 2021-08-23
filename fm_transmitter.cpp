@@ -83,8 +83,8 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    signal(SIGINT, sigIntHandler);
-    signal(SIGTSTP, sigIntHandler);
+    std::signal(SIGINT, sigIntHandler);
+    std::signal(SIGTSTP, sigIntHandler);
 
     auto finally = [&]() {
         delete transmitter;
