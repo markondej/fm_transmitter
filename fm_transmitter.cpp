@@ -87,8 +87,9 @@ int main(int argc, char** argv)
     std::signal(SIGTSTP, sigIntHandler);
 
     auto finally = [&]() {
-        delete transmitter;
+		auto temp = transmitter;
         transmitter = nullptr;
+        delete temp;
     };
     try {
         transmitter = new Transmitter();
