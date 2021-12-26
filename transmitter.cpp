@@ -220,8 +220,9 @@ class Device
 class ClockDevice : public Device
 {
     public:
-        ClockDevice(uintptr_t clockAddress, unsigned divisor) {
-            clock = reinterpret_cast<ClockRegisters *>(peripherals->GetVirtualAddress(clockAddress));
+        ClockDevice() = delete;
+        ClockDevice(uintptr_t address, unsigned divisor) {
+            clock = reinterpret_cast<ClockRegisters *>(peripherals->GetVirtualAddress(address));
             clock->ctl = (0x5a << 24) | 0x06;
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
             clock->div = (0x5a << 24) | (0xffffff & divisor);
@@ -237,6 +238,7 @@ class ClockDevice : public Device
 class ClockOutput : public ClockDevice
 {
     public:
+        ClockOutput() = delete;
 #ifndef GPIO21
         ClockOutput(unsigned divisor) : ClockDevice(CLK0_BASE_OFFSET, divisor) {
             output = reinterpret_cast<uint32_t *>(peripherals->GetVirtualAddress(GPIO_BASE_OFFSET));
@@ -267,6 +269,7 @@ class ClockOutput : public ClockDevice
 class PWMController : public ClockDevice
 {
     public:
+        PWMController() = delete;
         PWMController(unsigned sampleRate) : ClockDevice(PWMCLK_BASE_OFFSET, static_cast<unsigned>(Peripherals::GetClockFrequency() * 1000000.f * (0x01 << 12) / (PWM_WRITES_PER_SAMPLE * PWM_CHANNEL_RANGE * sampleRate))) {
             pwm = reinterpret_cast<PWMRegisters *>(peripherals->GetVirtualAddress(PWM_BASE_OFFSET));
             pwm->ctl = 0x00000000;
@@ -291,12 +294,13 @@ class PWMController : public ClockDevice
 class DMAController : public Device
 {
     public:
-        DMAController(uint32_t controllBlockAddress, unsigned dmaChannel) {
+        DMAController() = delete;
+        DMAController(uint32_t address, unsigned dmaChannel) {
             dma = reinterpret_cast<DMARegisters *>(peripherals->GetVirtualAddress((dmaChannel < 15) ? DMA0_BASE_OFFSET + dmaChannel * 0x100 : DMA15_BASE_OFFSET));
             dma->ctlStatus = (0x01 << 31);
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
             dma->ctlStatus = (0x01 << 2) | (0x01 << 1);
-            dma->cbAddress = controllBlockAddress;
+            dma->cbAddress = address;
             dma->ctlStatus = (0xff << 16) | 0x01;
         }
         virtual ~DMAController() {
