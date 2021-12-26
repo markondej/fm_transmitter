@@ -176,7 +176,7 @@ class AllocatedMemory
             if (!memHandle) {
                 mbox_close(mBoxFd);
                 memSize = 0;
-                throw std::runtime_error("Cannot allocate memory (" + std::to_string(size) + "bytes");
+                throw std::runtime_error("Cannot allocate memory (" + std::to_string(size) + " bytes)");
             }
             memAddress = mem_lock(mBoxFd, memHandle);
             memAllocated = mapmem(memAddress & ~0xc0000000, memSize);
