@@ -469,7 +469,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
     auto finally = [&]() {
         dmaCb[(cbOffset < 2 * bufferSize) ? cbOffset : 0].nextCbAddress = 0x00000000;
         while (dma.GetControllBlockAddress() != 0x00000000) {
-            std::this_thread::sleep_for(std::chrono::microseconds(1000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         stopped = true;
         samples.clear();
@@ -485,7 +485,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
             for (i = 0; i < samples.size(); i++) {
                 float value = samples[i].GetMonoValue();
                 while (i == ((dma.GetControllBlockAddress() - allocated.GetPhysicalAddress(dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
-                    std::this_thread::sleep_for(std::chrono::microseconds(1000));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
                 clkDiv[i] = (0x5a << 24) | (0xffffff & (clockDivisor - static_cast<int>(round(value * divisorRange))));
                 cbOffset += 2;
