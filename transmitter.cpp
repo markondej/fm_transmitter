@@ -42,7 +42,7 @@
 
 #define PERIPHERALS_PHYS_BASE 0x7e000000
 #define BCM2835_PERI_VIRT_BASE 0x20000000
-#define BCM2838_PERI_VIRT_BASE 0xfe000000
+#define BCM2711_PERI_VIRT_BASE 0xfe000000
 #define DMA0_BASE_OFFSET 0x00007000
 #define DMA15_BASE_OFFSET 0x00e05000
 #define CLK0_BASE_OFFSET 0x00101070
@@ -53,10 +53,10 @@
 #define TIMER_BASE_OFFSET 0x00003000
 
 #define BCM2835_MEM_FLAG 0x0c
-#define BCM2838_MEM_FLAG 0x04
+#define BCM2711_MEM_FLAG 0x04
 
 #define BCM2835_PLLD_FREQ 500
-#define BCM2838_PLLD_FREQ 750
+#define BCM2711_PLLD_FREQ 750
 
 #define BUFFER_TIME 1000000
 #define PWM_WRITES_PER_SAMPLE 10
@@ -134,10 +134,10 @@ class Peripherals
             return reinterpret_cast<uintptr_t>(peripherals) + offset;
         }
         inline static uintptr_t GetVirtualBaseAddress() {
-            return (bcm_host_get_peripheral_size() == BCM2838_PERI_VIRT_BASE) ? BCM2838_PERI_VIRT_BASE : bcm_host_get_peripheral_address();
+            return (bcm_host_get_peripheral_size() == BCM2711_PERI_VIRT_BASE) ? BCM2711_PERI_VIRT_BASE : bcm_host_get_peripheral_address();
         }
         inline static float GetClockFrequency() {
-            return (Peripherals::GetVirtualBaseAddress() == BCM2838_PERI_VIRT_BASE) ? BCM2838_PLLD_FREQ : BCM2835_PLLD_FREQ;
+            return (Peripherals::GetVirtualBaseAddress() == BCM2711_PERI_VIRT_BASE) ? BCM2711_PLLD_FREQ : BCM2835_PLLD_FREQ;
         }
     private:
         Peripherals() {
@@ -154,7 +154,7 @@ class Peripherals
         }
         unsigned GetSize() {
             unsigned size = bcm_host_get_peripheral_size();
-            if (size == BCM2838_PERI_VIRT_BASE) {
+            if (size == BCM2711_PERI_VIRT_BASE) {
                 size = 0x01000000;
             }
             return size;
@@ -172,7 +172,7 @@ class AllocatedMemory
             if (memSize % PAGE_SIZE) {
                 memSize = (memSize / PAGE_SIZE + 1) * PAGE_SIZE;
             }
-            memHandle = mem_alloc(mBoxFd, size, PAGE_SIZE, (Peripherals::GetVirtualBaseAddress() == BCM2835_PERI_VIRT_BASE) ? BCM2835_MEM_FLAG : BCM2838_MEM_FLAG);
+            memHandle = mem_alloc(mBoxFd, size, PAGE_SIZE, (Peripherals::GetVirtualBaseAddress() == BCM2835_PERI_VIRT_BASE) ? BCM2835_MEM_FLAG : BCM2711_MEM_FLAG);
             if (!memHandle) {
                 mbox_close(mBoxFd);
                 memSize = 0;
