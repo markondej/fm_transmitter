@@ -166,6 +166,7 @@ class Peripherals
 class AllocatedMemory
 {
     public:
+        AllocatedMemory() = delete;
         AllocatedMemory(unsigned size) {
             mBoxFd = mbox_open();
             memSize = size;

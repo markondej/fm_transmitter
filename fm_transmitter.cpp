@@ -111,9 +111,9 @@ int main(int argc, char** argv)
     } catch (std::exception &catched) {
         std::cout << "Error: " << catched.what() << std::endl;
         finally();
-        return 1;
+        return EXIT_FAILURE;
     }
     finally();
 
-    return 0;
+    return EXIT_SUCCESS;
 }
