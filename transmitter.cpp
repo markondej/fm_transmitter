@@ -43,14 +43,6 @@
 #define PERIPHERALS_PHYS_BASE 0x7e000000
 #define BCM2835_PERI_VIRT_BASE 0x20000000
 #define BCM2711_PERI_VIRT_BASE 0xfe000000
-#define DMA0_BASE_OFFSET 0x00007000
-#define DMA15_BASE_OFFSET 0x00e05000
-#define CLK0_BASE_OFFSET 0x00101070
-#define CLK1_BASE_OFFSET 0x00101078
-#define PWMCLK_BASE_OFFSET 0x001010a0
-#define GPIO_BASE_OFFSET 0x00200000
-#define PWM_BASE_OFFSET 0x0020c000
-#define TIMER_BASE_OFFSET 0x00003000
 
 #define BCM2835_MEM_FLAG 0x0c
 #define BCM2711_MEM_FLAG 0x04
@@ -58,9 +50,54 @@
 #define BCM2835_PLLD_FREQ 500
 #define BCM2711_PLLD_FREQ 750
 
-#define BUFFER_TIME 1000000
-#define PWM_WRITES_PER_SAMPLE 10
+#define GPIO_BASE_OFFSET 0x00200000
+#define TIMER_BASE_OFFSET 0x00003000
+
+#define CLK0_BASE_OFFSET 0x00101070
+#define CLK1_BASE_OFFSET 0x00101078
+#define CLK_PASSWORD (0x5a << 24)
+#define CLK_CTL_SRC_PLLA 0x04
+#define CLK_CTL_SRC_PLLC 0x05
+#define CLK_CTL_SRC_PLLD 0x06
+#define CLK_CTL_ENAB (0x01 << 4)
+#define CLK_CTL_MASH(x) ((x & 0x03) << 9)
+
+#define PWMCLK_BASE_OFFSET 0x001010a0
+#define PWM_BASE_OFFSET 0x0020c000
 #define PWM_CHANNEL_RANGE 32
+#define PWM_WRITES_PER_SAMPLE 10
+#define PWM_CTL_CLRF1 (0x01 << 6)
+#define PWM_CTL_USEF1 (0x01 << 5)
+#define PWM_CTL_RPTL1 (0x01 << 2)
+#define PWM_CTL_MODE1 (0x01 << 1)
+#define PWM_CTL_PWEN1 0x01
+#define PWM_STA_BERR (0x01 << 8)
+#define PWM_STA_GAPO4 (0x01 << 7)
+#define PWM_STA_GAPO3 (0x01 << 6)
+#define PWM_STA_GAPO2 (0x01 << 5)
+#define PWM_STA_GAPO1 (0x01 << 4)
+#define PWM_STA_RERR1 (0x01 << 3)
+#define PWM_STA_WERR1 (0x01 << 2)
+#define PWM_STA_EMPT1 (0x01 << 1)
+#define PWM_STA_FULL1 0x01
+#define PWM_DMAC_ENAB (0x01 << 31)
+#define PWM_DMAC_PANIC(x) ((x & 0x0f) << 8)
+#define PWM_DMAC_DREQ(x) (x & 0x0f)
+
+#define DMA0_BASE_OFFSET 0x00007000
+#define DMA15_BASE_OFFSET 0x00e05000
+#define DMA_CS_RESET (0x01 << 31)
+#define DMA_CS_PANIC_PRIORITY(x) ((x & 0x0f) << 20)
+#define DMA_CS_PRIORITY(x) ((x & 0x0f) << 16)
+#define DMA_CS_INT (0x01 << 2)
+#define DMA_CS_END (0x01 << 1)
+#define DMA_CS_ACTIVE 0x01
+#define DMA_TI_NO_WIDE_BURST (0x01 << 26)
+#define DMA_TI_PERMAP(x) ((x & 0x0f) << 16)
+#define DMA_TI_DEST_DREQ (0x01 << 6)
+#define DMA_TI_WAIT_RESP (0x01 << 3)
+
+#define BUFFER_TIME 1000000
 #define PAGE_SIZE 4096
 
 struct TimerRegisters {
@@ -224,13 +261,12 @@ class ClockDevice : public Device
         ClockDevice() = delete;
         ClockDevice(uintptr_t address, unsigned divisor) {
             clock = reinterpret_cast<ClockRegisters *>(peripherals->GetVirtualAddress(address));
-            clock->ctl = (0x5a << 24) | 0x06;
-            std::this_thread::sleep_for(std::chrono::microseconds(1000));
-            clock->div = (0x5a << 24) | (0xffffff & divisor);
-            clock->ctl = (0x5a << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
-        }
+            clock->ctl = CLK_PASSWORD | CLK_CTL_SRC_PLLD;
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            clock->div = CLK_PASSWORD | (0xffffff & divisor);
+            clock->ctl = CLK_PASSWORD | CLK_CTL_MASH(0x1) | CLK_CTL_ENAB | CLK_CTL_SRC_PLLD;        }
         virtual ~ClockDevice() {
-            clock->ctl = (0x5a << 24) | 0x06;
+            clock->ctl = CLK_PASSWORD | CLK_CTL_SRC_PLLD;
         }
     protected:
         volatile ClockRegisters *clock;
@@ -258,7 +294,7 @@ class ClockOutput : public ClockDevice
 #endif
         }
         inline void SetDivisor(unsigned divisor) {
-            clock->div = (0x5a << 24) | (0xffffff & divisor);
+            clock->div = CLK_PASSWORD | (0xffffff & divisor);
         }
         inline volatile uint32_t &GetDivisor() {
             return clock->div;
@@ -274,13 +310,13 @@ class PWMController : public ClockDevice
         PWMController(unsigned sampleRate) : ClockDevice(PWMCLK_BASE_OFFSET, static_cast<unsigned>(Peripherals::GetClockFrequency() * 1000000.f * (0x01 << 12) / (PWM_WRITES_PER_SAMPLE * PWM_CHANNEL_RANGE * sampleRate))) {
             pwm = reinterpret_cast<PWMRegisters *>(peripherals->GetVirtualAddress(PWM_BASE_OFFSET));
             pwm->ctl = 0x00000000;
-            std::this_thread::sleep_for(std::chrono::microseconds(1000));
-            pwm->status = 0x01fc;
-            pwm->ctl = (0x01 << 6);
-            std::this_thread::sleep_for(std::chrono::microseconds(1000));
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            pwm->status = PWM_STA_BERR | PWM_STA_GAPO1 | PWM_STA_RERR1 | PWM_STA_WERR1;
+            pwm->ctl = PWM_CTL_CLRF1;
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
             pwm->chn1Range = PWM_CHANNEL_RANGE;
-            pwm->dmaConf = (0x01 << 31) | 0x0707;
-            pwm->ctl = (0x01 << 5) | (0x01 << 2) | 0x01;
+            pwm->dmaConf = PWM_DMAC_ENAB | PWM_DMAC_PANIC(0x7) | PWM_DMAC_DREQ(0x7);
+            pwm->ctl = PWM_CTL_USEF1 | PWM_CTL_RPTL1 | PWM_CTL_MODE1 | PWM_CTL_PWEN1;
         }
         virtual ~PWMController() {
             pwm->ctl = 0x00000000;
@@ -298,14 +334,14 @@ class DMAController : public Device
         DMAController() = delete;
         DMAController(uint32_t address, unsigned dmaChannel) {
             dma = reinterpret_cast<DMARegisters *>(peripherals->GetVirtualAddress((dmaChannel < 15) ? DMA0_BASE_OFFSET + dmaChannel * 0x100 : DMA15_BASE_OFFSET));
-            dma->ctlStatus = (0x01 << 31);
-            std::this_thread::sleep_for(std::chrono::microseconds(1000));
-            dma->ctlStatus = (0x01 << 2) | (0x01 << 1);
+            dma->ctlStatus = DMA_CS_RESET;
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            dma->ctlStatus = DMA_CS_INT | DMA_CS_END;
             dma->cbAddress = address;
-            dma->ctlStatus = (0xff << 16) | 0x01;
+            dma->ctlStatus = DMA_CS_PANIC_PRIORITY(0xf) | DMA_CS_PRIORITY(0xf) | DMA_CS_ACTIVE;
         }
         virtual ~DMAController() {
-            dma->ctlStatus = (0x01 << 31);
+            dma->ctlStatus = DMA_CS_RESET;
         }
         inline void SetControllBlockAddress(uint32_t address) {
             dma->cbAddress = address;
@@ -444,8 +480,8 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
     volatile uint32_t *pwmFifoData = reinterpret_cast<uint32_t *>(reinterpret_cast<uintptr_t>(clkDiv) + sizeof(uint32_t) * bufferSize);
     for (i = 0; i < bufferSize; i++) {
         float value = samples[i].GetMonoValue();
-        clkDiv[i] = (0x5a << 24) | (0xffffff & (clockDivisor - static_cast<int32_t>(round(value * divisorRange))));
-        dmaCb[cbOffset].transferInfo = (0x01 << 26) | (0x01 << 3);
+        clkDiv[i] = CLK_PASSWORD | (0xffffff & (clockDivisor - static_cast<int32_t>(round(value * divisorRange))));
+        dmaCb[cbOffset].transferInfo = DMA_TI_NO_WIDE_BURST | DMA_TI_WAIT_RESP;;
         dmaCb[cbOffset].srcAddress = allocated.GetPhysicalAddress(&clkDiv[i]);
         dmaCb[cbOffset].dstAddress = peripherals.GetPhysicalAddress(&output.GetDivisor());
         dmaCb[cbOffset].transferLen = sizeof(uint32_t);
@@ -453,7 +489,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
         dmaCb[cbOffset].nextCbAddress = allocated.GetPhysicalAddress(&dmaCb[cbOffset + 1]);
         cbOffset++;
 
-        dmaCb[cbOffset].transferInfo = (0x01 << 26) | (0x05 << 16) | (0x01 << 6) | (0x01 << 3);
+        dmaCb[cbOffset].transferInfo = DMA_TI_NO_WIDE_BURST | DMA_TI_PERMAP(0x5) | DMA_TI_DEST_DREQ | DMA_TI_WAIT_RESP;
         dmaCb[cbOffset].srcAddress = allocated.GetPhysicalAddress(pwmFifoData);
         dmaCb[cbOffset].dstAddress = peripherals.GetPhysicalAddress(&pwm.GetFifoIn());
         dmaCb[cbOffset].transferLen = sizeof(uint32_t) * PWM_WRITES_PER_SAMPLE;
@@ -465,7 +501,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
 
     DMAController dma(allocated.GetPhysicalAddress(dmaCb), dmaChannel);
 
-    std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 4));
+    std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 100));
 
     auto finally = [&]() {
         dmaCb[(cbOffset < 2 * bufferSize) ? cbOffset : 0].nextCbAddress = 0x00000000;
@@ -486,9 +522,9 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
             for (i = 0; i < samples.size(); i++) {
                 float value = samples[i].GetMonoValue();
                 while (i == ((dma.GetControllBlockAddress() - allocated.GetPhysicalAddress(dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 100));
                 }
-                clkDiv[i] = (0x5a << 24) | (0xffffff & (clockDivisor - static_cast<int>(round(value * divisorRange))));
+                clkDiv[i] = CLK_PASSWORD | (0xffffff & (clockDivisor - static_cast<int>(round(value * divisorRange))));
                 cbOffset += 2;
             }
         }
