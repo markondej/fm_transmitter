@@ -522,7 +522,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
             for (i = 0; i < samples.size(); i++) {
                 float value = samples[i].GetMonoValue();
                 while (i == ((dma.GetControllBlockAddress() - allocated.GetPhysicalAddress(dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
-					std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 10));
+                    std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 10));
                 }
                 clkDiv[i] = CLK_PASSWORD | (0xffffff & (clockDivisor - static_cast<int>(round(value * divisorRange))));
                 cbOffset += 2;
