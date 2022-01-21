@@ -473,12 +473,12 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
     PWMController pwm(sampleRate);
     Peripherals &peripherals = Peripherals::GetInstance();
 
-    unsigned i, cbOffset = 0;
+    unsigned cbOffset = 0;
 
     volatile DMAControllBlock *dmaCb = reinterpret_cast<DMAControllBlock *>(allocated.GetBaseAddress());
     volatile uint32_t *clkDiv = reinterpret_cast<uint32_t *>(reinterpret_cast<uintptr_t>(dmaCb) + 2 * sizeof(DMAControllBlock) * bufferSize);
     volatile uint32_t *pwmFifoData = reinterpret_cast<uint32_t *>(reinterpret_cast<uintptr_t>(clkDiv) + sizeof(uint32_t) * bufferSize);
-    for (i = 0; i < bufferSize; i++) {
+    for (unsigned i = 0; i < bufferSize; i++) {
         float value = samples[i].GetMonoValue();
         clkDiv[i] = CLK_PASSWORD | (0xffffff & (clockDivisor - static_cast<int32_t>(round(value * divisorRange))));
         dmaCb[cbOffset].transferInfo = DMA_TI_NO_WIDE_BURST | DMA_TI_WAIT_RESP;;
@@ -519,7 +519,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
             }
             cbOffset = 0;
             eof = samples.size() < bufferSize;
-            for (i = 0; i < samples.size(); i++) {
+            for (std::size_t i = 0; i < samples.size(); i++) {
                 float value = samples[i].GetMonoValue();
                 while (i == ((dma.GetControllBlockAddress() - allocated.GetPhysicalAddress(dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
                     std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 10));
