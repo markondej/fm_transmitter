@@ -31,10 +31,9 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef WAVE_READER_HPP
-#define WAVE_READER_HPP
+#pragma once
 
-#include "sample.hpp"
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -57,6 +56,15 @@ struct WaveHeader
     uint32_t subchunk2Size;
 };
 
+class Sample
+{
+public:
+    Sample(uint8_t *data, unsigned channels, unsigned bitsPerChannel);
+    float GetMonoValue() const;
+protected:
+    float value;
+};
+
 class WaveReader
 {
     public:
@@ -77,5 +85,3 @@ class WaveReader
         unsigned dataOffset, headerOffset, currentDataOffset;
         int fileDescriptor;
 };
-
-#endif // WAVE_READER_HPP

@@ -31,8 +31,7 @@
     WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef TRANSMITTER_HPP
-#define TRANSMITTER_HPP
+#pragma once
 
 #include "wave_reader.hpp"
 #include <mutex>
@@ -52,12 +51,9 @@ class Transmitter
     private:
         void TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange);
         void TransmitViaDma(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange, unsigned dmaChannel);
-        static void TransmitterThread(Transmitter *instance, ClockOutput *output, unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples);
+        static void TransmitterThread(Transmitter *instance, ClockOutput *output, unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop);
 
-        static bool transmitting;
         ClockOutput *output;
         std::mutex access;
-        bool stopped;
+        bool stop;
 };
-
-#endif // TRANSMITTER_HPP

@@ -353,10 +353,8 @@ class DMAController : public Device
         volatile DMARegisters *dma;
 };
 
-bool Transmitter::transmitting = false;
-
 Transmitter::Transmitter()
-    : output(nullptr), stopped(true)
+    : output(nullptr), stop(true)
 {
 }
 
@@ -368,11 +366,7 @@ Transmitter::~Transmitter() {
 
 void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth, unsigned dmaChannel, bool preserveCarrier)
 {
-    if (transmitting) {
-        throw std::runtime_error("Cannot transmit, transmitter already in use");
-    }
-    transmitting = true;
-    stopped = false;
+    stop = false;
 
     WaveHeader header = reader.GetHeader();
     unsigned bufferSize = static_cast<unsigned>(static_cast<unsigned long long>(header.sampleRate) * BUFFER_TIME / 1000000);
@@ -389,7 +383,6 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
             delete output;
             output = nullptr;
         }
-        transmitting = false;
     };
     try {
         if (dmaChannel != 0xff) {
@@ -406,36 +399,43 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
 
 void Transmitter::Stop()
 {
-    stopped = true;
+    stop = true;
 }
 
 void Transmitter::TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange)
 {
-    std::vector<Sample> samples = reader.GetSamples(bufferSize, stopped);
+    std::vector<Sample> samples = reader.GetSamples(bufferSize, stop);
     if (samples.empty()) {
         return;
     }
 
     unsigned sampleOffset = 0;
-    bool eof = samples.size() < bufferSize;
-    std::thread transmitterThread(Transmitter::TransmitterThread, this, &output, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples);
+    bool eof = samples.size() < bufferSize, txStop = false;
+    std::thread transmitterThread(Transmitter::TransmitterThread, this, &output, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &txStop);
 
     std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 2));
 
     auto finally = [&]() {
-        stopped = true;
+        {
+            std::lock_guard<std::mutex> lock(access);
+            txStop = true;
+        }
         transmitterThread.join();
         samples.clear();
+        stop = true;
     };
     try {
-        while (!eof && !stopped) {
+        while (!eof && !stop) {
             {
                 std::lock_guard<std::mutex> lock(access);
+                if (txStop) {
+                    throw std::runtime_error("Transmitter thread has unexpectedly exited");
+                }
                 if (samples.empty()) {
                     if (!reader.SetSampleOffset(sampleOffset + bufferSize)) {
                         break;
                     }
-                    samples = reader.GetSamples(bufferSize, stopped);
+                    samples = reader.GetSamples(bufferSize, stop);
                     if (samples.empty()) {
                         break;
                     }
@@ -459,7 +459,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
 
     AllocatedMemory allocated(sizeof(uint32_t) * bufferSize + sizeof(DMAControllBlock) * (2 * bufferSize) + sizeof(uint32_t));
 
-    std::vector<Sample> samples = reader.GetSamples(bufferSize, stopped);
+    std::vector<Sample> samples = reader.GetSamples(bufferSize, stop);
     if (samples.empty()) {
         return;
     }
@@ -508,12 +508,12 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
         while (dma.GetControllBlockAddress() != 0x00000000) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        stopped = true;
         samples.clear();
+        stop = true;
     };
     try {
-        while (!eof && !stopped) {
-            samples = reader.GetSamples(bufferSize, stopped);
+        while (!eof && !stop) {
+            samples = reader.GetSamples(bufferSize, stop);
             if (!samples.size()) {
                 break;
             }
@@ -535,47 +535,52 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
     finally();
 }
 
-void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples)
+void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop)
 {
-    Peripherals &peripherals = Peripherals::GetInstance();
+    try {
+        Peripherals &peripherals = Peripherals::GetInstance();
 
-    volatile TimerRegisters *timer = reinterpret_cast<TimerRegisters *>(peripherals.GetVirtualAddress(TIMER_BASE_OFFSET));
-    uint64_t current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
-    uint64_t playbackStart = current;
+        volatile TimerRegisters *timer = reinterpret_cast<TimerRegisters *>(peripherals.GetVirtualAddress(TIMER_BASE_OFFSET));
+        uint64_t current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
+        uint64_t playbackStart = current;
 
-    while (true) {
-        std::vector<Sample> loadedSamples;
         while (true) {
-            {
-                std::lock_guard<std::mutex> lock(instance->access);
-                if (instance->stopped) {
-                    return;
+            std::vector<Sample> loadedSamples;
+            while (true) {
+                {
+                    std::lock_guard<std::mutex> lock(instance->access);
+                    if (*stop) {
+                        return;
+                    }
+                    loadedSamples = std::move(*samples);
+                    current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
+                    if (!loadedSamples.empty()) {
+                        *sampleOffset = (current - playbackStart) * sampleRate / 1000000;
+                        break;
+                    }
                 }
-                loadedSamples = std::move(*samples);
-                current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
-                if (!loadedSamples.empty()) {
-                    *sampleOffset = (current - playbackStart) * sampleRate / 1000000;
+                std::this_thread::sleep_for(std::chrono::microseconds(1));
+            };
+
+            uint64_t start = current;
+            unsigned offset = (current - start) * sampleRate / 1000000;
+
+            while (true) {
+                if (offset >= loadedSamples.size()) {
                     break;
                 }
-            }
-            std::this_thread::sleep_for(std::chrono::microseconds(1));
-        };
-
-        uint64_t start = current;
-        unsigned offset = (current - start) * sampleRate / 1000000;
-
-        while (true) {
-            if (offset >= loadedSamples.size()) {
-                break;
-            }
-            unsigned prevOffset = offset;
-            float value = loadedSamples[offset].GetMonoValue();
-            instance->output->SetDivisor(clockDivisor - static_cast<int>(round(value * divisorRange)));
-            while (offset == prevOffset) {
-                std::this_thread::sleep_for(std::chrono::microseconds(1)); // asm("nop");
-                current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));;
-                offset = (current - start) * sampleRate / 1000000;
+                unsigned prevOffset = offset;
+                float value = loadedSamples[offset].GetMonoValue();
+                instance->output->SetDivisor(clockDivisor - static_cast<int>(round(value * divisorRange)));
+                while (offset == prevOffset) {
+                    std::this_thread::sleep_for(std::chrono::microseconds(1)); // asm("nop");
+                    current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));;
+                    offset = (current - start) * sampleRate / 1000000;
+                }
             }
         }
+    } catch (...) {
+        std::lock_guard<std::mutex> lock(instance->access);
+        *stop = true;
     }
 }

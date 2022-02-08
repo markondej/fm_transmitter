@@ -109,9 +109,11 @@ int main(int argc, char** argv)
         std::cout << "Error: " << catched.what() << std::endl;
         result = EXIT_FAILURE;
     }
-    auto temp = transmitter;
-    transmitter = nullptr;
-    delete temp;
+    if (transmitter != nullptr) {
+        auto temp = transmitter;
+        transmitter = nullptr;
+        delete temp;
+    }
 
     return result;
 }
