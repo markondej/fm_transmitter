@@ -7,7 +7,7 @@ ifeq ($(GPIO21), 1)
 endif
 
 all: fm_transmitter.o mailbox.o wave_reader.o transmitter.o
-	g++ -L/opt/vc/lib -o $(EXECUTABLE) fm_transmitter.o mailbox.o wave_reader.o transmitter.o -lm -lpthread -lbcm_host
+	g++ -o $(EXECUTABLE) fm_transmitter.o mailbox.o wave_reader.o transmitter.o -L/opt/vc/lib -lm -lpthread -lbcm_host
 
 mailbox.o: mailbox.c mailbox.h
 	g++ $(FLAGS) -c mailbox.c
