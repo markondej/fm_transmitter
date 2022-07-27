@@ -24,7 +24,7 @@ After a successful build you can start transmitting by executing the "fm_transmi
 ```
 sudo ./fm_transmitter -f 100.6 acoustic_guitar_duet.wav
 ```
-Where:
+Notice:
 * -f frequency - Specifies the frequency in MHz, 100.0 by default if not passed
 * acoustic_guitar_duet.wav - Sample WAV file, you can use your own
 
@@ -40,9 +40,9 @@ On Raspberry Pi 4 other built-in hardware probably interfers somehow with this s
 ```
 make GPIO21=1
 ```
-2. Change either ARM core frequency scaling governor settings to "performance" or to change ARM minimum and maximum core frequencies to one constant value (see: https://www.raspberrypi.org/forums/viewtopic.php?t=152692 ).
+2. Changing either ARM core frequency scaling governor settings to "powersave" or changing ARM minimum and maximum core frequencies to one constant value (see: https://www.raspberrypi.org/forums/viewtopic.php?t=152692 ).
 ```
-echo "performance"| sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+echo "powersave"| sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 ```
 3. Using lower FM broadcasting frequencies (below 93 MHz) when transmitting.
 ### Use as general audio output device
