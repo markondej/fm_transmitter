@@ -1,7 +1,7 @@
 /*
     FM Transmitter - use Raspberry Pi as FM transmitter
 
-    Copyright (c) 2021, Marcin Kondej
+    Copyright (c) 2022, Marcin Kondej
     All rights reserved.
 
     See https://github.com/markondej/fm_transmitter
@@ -164,16 +164,16 @@ class Peripherals
             static Peripherals instance;
             return instance;
         }
-        inline uintptr_t GetPhysicalAddress(volatile void *object) const {
+        uintptr_t GetPhysicalAddress(volatile void *object) const {
             return PERIPHERALS_PHYS_BASE + (reinterpret_cast<uintptr_t>(object) - reinterpret_cast<uintptr_t>(peripherals));
         }
-        inline uintptr_t GetVirtualAddress(uintptr_t offset) const {
+        uintptr_t GetVirtualAddress(uintptr_t offset) const {
             return reinterpret_cast<uintptr_t>(peripherals) + offset;
         }
-        inline static uintptr_t GetVirtualBaseAddress() {
+        static uintptr_t GetVirtualBaseAddress() {
             return (bcm_host_get_peripheral_size() == BCM2711_PERI_VIRT_BASE) ? BCM2711_PERI_VIRT_BASE : bcm_host_get_peripheral_address();
         }
-        inline static float GetClockFrequency() {
+        static float GetClockFrequency() {
             return (Peripherals::GetVirtualBaseAddress() == BCM2711_PERI_VIRT_BASE) ? BCM2711_PLLD_FREQ : BCM2835_PLLD_FREQ;
         }
     private:
@@ -229,10 +229,10 @@ class AllocatedMemory
         AllocatedMemory(const AllocatedMemory &) = delete;
         AllocatedMemory(AllocatedMemory &&) = delete;
         AllocatedMemory &operator=(const AllocatedMemory &) = delete;
-        inline uintptr_t GetPhysicalAddress(volatile void *object) const {
+        uintptr_t GetPhysicalAddress(volatile void *object) const {
             return (memSize) ? memAddress + (reinterpret_cast<uintptr_t>(object) - reinterpret_cast<uintptr_t>(memAllocated)) : 0x00000000;
         }
-        inline uintptr_t GetBaseAddress() const {
+        uintptr_t GetBaseAddress() const {
             return reinterpret_cast<uintptr_t>(memAllocated);
         }
     private:
@@ -293,10 +293,10 @@ class ClockOutput : public ClockDevice
             *output = (*output & 0xffffffc7) | (0x02 << 3);
 #endif
         }
-        inline void SetDivisor(unsigned divisor) {
+        void SetDivisor(unsigned divisor) {
             clock->div = CLK_PASSWORD | (0xffffff & divisor);
         }
-        inline volatile uint32_t &GetDivisor() {
+        volatile uint32_t &GetDivisor() {
             return clock->div;
         }
     private:
@@ -321,7 +321,7 @@ class PWMController : public ClockDevice
         virtual ~PWMController() {
             pwm->ctl = 0x00000000;
         }
-        inline volatile uint32_t &GetFifoIn() {
+        volatile uint32_t &GetFifoIn() {
             return pwm->fifoIn;
         }
     private:
@@ -343,10 +343,10 @@ class DMAController : public Device
         virtual ~DMAController() {
             dma->ctlStatus = DMA_CS_RESET;
         }
-        inline void SetControllBlockAddress(uint32_t address) {
+        void SetControllBlockAddress(uint32_t address) {
             dma->cbAddress = address;
         }
-        inline volatile uint32_t &GetControllBlockAddress() {
+        volatile uint32_t &GetControllBlockAddress() {
             return dma->cbAddress;
         }
     private:
