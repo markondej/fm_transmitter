@@ -1,36 +1,3 @@
-/*
-    FM Transmitter - use Raspberry Pi as FM transmitter
-
-    Copyright (c) 2021, Marcin Kondej
-    All rights reserved.
-
-    See https://github.com/markondej/fm_transmitter
-
-    Redistribution and use in source and binary forms, with or without modification, are
-    permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice, this list
-    of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright notice, this
-    list of conditions and the following disclaimer in the documentation and/or other
-    materials provided with the distribution.
-
-    3. Neither the name of the copyright holder nor the names of its contributors may be
-    used to endorse or promote products derived from this software without specific
-    prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
-    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-    OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT
-    SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-    INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
-    TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-    BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
-    WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
 #include "wave_reader.hpp"
 #include <stdexcept>
 #include <cstring>
@@ -38,32 +5,6 @@
 #include <chrono>
 #include <unistd.h>
 #include <fcntl.h>
-#include <climits>
-
-Sample::Sample(uint8_t *data, unsigned channels, unsigned bitsPerChannel)
-    : value(0.f)
-{
-    int sum = 0;
-    int16_t *channelValues = new int16_t[channels];
-    for (unsigned i = 0; i < channels; i++) {
-        switch (bitsPerChannel >> 3) {
-        case 2:
-            channelValues[i] = (data[((i + 1) << 1) - 1] << 8) | data[((i + 1) << 1) - 2];
-            break;
-        case 1:
-            channelValues[i] = (static_cast<int16_t>(data[i]) - 0x80) << 8;
-            break;
-        }
-        sum += channelValues[i];
-    }
-    value = 2 * sum / (static_cast<float>(USHRT_MAX) * channels);
-    delete[] channelValues;
-}
-
-float Sample::GetMonoValue() const
-{
-    return value;
-}
 
 WaveReader::WaveReader(const std::string &filename, bool &stop) :
     filename(filename), headerOffset(0), currentDataOffset(0)
@@ -134,29 +75,41 @@ const WaveHeader &WaveReader::GetHeader() const
     return header;
 }
 
-std::vector<Sample> WaveReader::GetSamples(unsigned quantity, bool &stop) {
-    unsigned bytesPerSample = (header.bitsPerSample >> 3) * header.channels;
-    unsigned bytesToRead = quantity * bytesPerSample;
-    unsigned bytesLeft = header.subchunk2Size - currentDataOffset;
+std::vector<std::vector<int16_t>> WaveReader::GetFrames(std::size_t quantity, bool &stop) {
+    uint16_t bytesPerSample = (header.bitsPerSample >> 3);
+    uint16_t bytesPerFrame = bytesPerSample * header.channels;
+    std::size_t bytesToRead = quantity * bytesPerFrame;
+    std::size_t bytesLeft = header.subchunk2Size - currentDataOffset;
     if (bytesToRead > bytesLeft) {
-        bytesToRead = bytesLeft - bytesLeft % bytesPerSample;
-        quantity = bytesToRead / bytesPerSample;
+        bytesToRead = bytesLeft - bytesLeft % bytesPerFrame;
+        quantity = bytesToRead / bytesPerFrame;
     }
 
     std::vector<uint8_t> data = std::move(ReadData(bytesToRead, false, stop));
     if (data.size() < bytesToRead) {
-        quantity = data.size() / bytesPerSample;
+        quantity = data.size() / bytesPerFrame;
     }
 
-    std::vector<Sample> samples;
-    samples.reserve(quantity);
-    for (unsigned i = 0; i < quantity; i++) {
-        samples.push_back(Sample(&data[bytesPerSample * i], header.channels, header.bitsPerSample));
+    std::vector<std::vector<int16_t>> frames;
+    frames.reserve(quantity);
+    for (std::size_t i = 0; i < quantity; i++) {
+        std::vector<int16_t> channels(header.channels, 0x0000);
+        for (int16_t j = 0; j < header.channels; j++) {
+            switch (bytesPerSample) {
+            case 2:
+                channels[j] = (data[i * bytesPerFrame + j * bytesPerSample + 1] << 8) | data[i * bytesPerFrame + j * bytesPerSample];
+                break;
+            case 1:
+                channels[j] = (static_cast<int16_t>(data[i * bytesPerFrame]) - 0x80) << 8;
+                break;
+            }
+        }
+        frames.push_back(channels);
     }
-    return samples;
+    return frames;
 }
 
-bool WaveReader::SetSampleOffset(unsigned offset) {
+bool WaveReader::SetFrameOffset(std::size_t offset) {
     if (fileDescriptor != STDIN_FILENO) {
         currentDataOffset = offset * (header.bitsPerSample >> 3) * header.channels;
         if (lseek(fileDescriptor, dataOffset + currentDataOffset, SEEK_SET) == -1) {
@@ -166,9 +119,9 @@ bool WaveReader::SetSampleOffset(unsigned offset) {
     return true;
 }
 
-std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes, bool &stop)
+std::vector<uint8_t> WaveReader::ReadData(std::size_t bytesToRead, bool headerBytes, bool &stop)
 {
-    unsigned bytesRead = 0;
+    std::size_t bytesRead = 0;
     std::vector<uint8_t> data;
     data.resize(bytesToRead);
     while ((bytesRead < bytesToRead) && !stop) {
