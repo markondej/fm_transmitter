@@ -34,7 +34,7 @@
 #pragma once
 
 #include "wave_reader.hpp"
-#include <mutex>
+#include <condition_variable>
 
 class ClockOutput;
 
@@ -53,7 +53,8 @@ class Transmitter
         void TransmitViaDma(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange, unsigned dmaChannel);
         static void TransmitterThread(Transmitter *instance, ClockOutput *output, unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop);
 
+        std::condition_variable cv;
         ClockOutput *output;
-        std::mutex access;
-        bool stop;
+        std::mutex mtx;
+        bool enable;
 };

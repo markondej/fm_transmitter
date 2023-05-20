@@ -65,7 +65,7 @@ float Sample::GetMonoValue() const
     return value;
 }
 
-WaveReader::WaveReader(const std::string &filename, bool &stop) :
+WaveReader::WaveReader(const std::string &filename, bool &enable, std::mutex &mtx) :
     filename(filename), headerOffset(0), currentDataOffset(0)
 {
     if (!filename.empty()) {
@@ -80,12 +80,12 @@ WaveReader::WaveReader(const std::string &filename, bool &stop) :
     }
 
     try {
-        ReadData(sizeof(WaveHeader::chunkID) + sizeof(WaveHeader::chunkSize) + sizeof(WaveHeader::format), true, stop);
+        ReadData(sizeof(WaveHeader::chunkID) + sizeof(WaveHeader::chunkSize) + sizeof(WaveHeader::format), true, enable, mtx);
         if ((std::string(reinterpret_cast<char *>(header.chunkID), 4) != std::string("RIFF")) || (std::string(reinterpret_cast<char *>(header.format), 4) != std::string("WAVE"))) {
             throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", WAVE file expected"));
         }
 
-        ReadData(sizeof(WaveHeader::subchunk1ID) + sizeof(WaveHeader::subchunk1Size), true, stop);
+        ReadData(sizeof(WaveHeader::subchunk1ID) + sizeof(WaveHeader::subchunk1Size), true, enable, mtx);
         unsigned subchunk1MinSize = sizeof(WaveHeader::audioFormat) + sizeof(WaveHeader::channels) +
             sizeof(WaveHeader::sampleRate) + sizeof(WaveHeader::byteRate) + sizeof(WaveHeader::blockAlign) +
             sizeof(WaveHeader::bitsPerSample);
@@ -93,7 +93,7 @@ WaveReader::WaveReader(const std::string &filename, bool &stop) :
             throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", data corrupted"));
         }
 
-        ReadData(header.subchunk1Size, true, stop);
+        ReadData(header.subchunk1Size, true, enable, mtx);
         if ((header.audioFormat != WAVE_FORMAT_PCM) ||
             (header.byteRate != (header.bitsPerSample >> 3) * header.channels * header.sampleRate) ||
             (header.blockAlign != (header.bitsPerSample >> 3) * header.channels) ||
@@ -101,7 +101,7 @@ WaveReader::WaveReader(const std::string &filename, bool &stop) :
             throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", unsupported WAVE format"));
         }
 
-        ReadData(sizeof(WaveHeader::subchunk2ID) + sizeof(WaveHeader::subchunk2Size), true, stop);
+        ReadData(sizeof(WaveHeader::subchunk2ID) + sizeof(WaveHeader::subchunk2Size), true, enable, mtx);
         if (std::string(reinterpret_cast<char *>(header.subchunk2ID), 4) != std::string("data")) {
             throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", data corrupted"));
         }
@@ -134,7 +134,7 @@ const WaveHeader &WaveReader::GetHeader() const
     return header;
 }
 
-std::vector<Sample> WaveReader::GetSamples(unsigned quantity, bool &stop) {
+std::vector<Sample> WaveReader::GetSamples(unsigned quantity, bool &enable, std::mutex &mtx) {
     unsigned bytesPerSample = (header.bitsPerSample >> 3) * header.channels;
     unsigned bytesToRead = quantity * bytesPerSample;
     unsigned bytesLeft = header.subchunk2Size - currentDataOffset;
@@ -143,7 +143,7 @@ std::vector<Sample> WaveReader::GetSamples(unsigned quantity, bool &stop) {
         quantity = bytesToRead / bytesPerSample;
     }
 
-    std::vector<uint8_t> data = std::move(ReadData(bytesToRead, false, stop));
+    std::vector<uint8_t> data = std::move(ReadData(bytesToRead, false, enable, mtx));
     if (data.size() < bytesToRead) {
         quantity = data.size() / bytesPerSample;
     }
@@ -166,12 +166,18 @@ bool WaveReader::SetSampleOffset(unsigned offset) {
     return true;
 }
 
-std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes, bool &stop)
+std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes, bool &enable, std::mutex &mtx)
 {
     unsigned bytesRead = 0;
     std::vector<uint8_t> data;
     data.resize(bytesToRead);
-    while ((bytesRead < bytesToRead) && !stop) {
+    while (bytesRead < bytesToRead) {
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            if (!enable) {
+                break;
+            }
+        }
         int bytes = read(fileDescriptor, &data[bytesRead], bytesToRead - bytesRead);
         if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
             ((static_cast<unsigned>(bytes) < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
@@ -191,14 +197,20 @@ std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes
     }
 
     if (headerBytes) {
-        if (stop) {
-            throw std::runtime_error("Cannot obtain header, program interrupted");
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            if (!enable) {
+                throw std::runtime_error("Cannot obtain header, program interrupted");
+            }
         }
         std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], data.data(), bytesRead);
         headerOffset += bytesRead;
     } else {
-        if (stop) {
-            data.resize(bytesRead);
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            if (!enable) {
+                data.resize(bytesRead);
+            }
         }
         currentDataOffset += bytesRead;
     }

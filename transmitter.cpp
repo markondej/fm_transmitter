@@ -32,7 +32,7 @@
 */
 
 #include "transmitter.hpp"
-#include "mailbox.h"
+#include "mailbox.hpp"
 #include <bcm_host.h>
 #include <thread>
 #include <chrono>
@@ -354,7 +354,7 @@ class DMAController : public Device
 };
 
 Transmitter::Transmitter()
-    : output(nullptr), stop(true)
+    : output(nullptr), enable(false)
 {
 }
 
@@ -366,7 +366,10 @@ Transmitter::~Transmitter() {
 
 void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth, unsigned dmaChannel, bool preserveCarrier)
 {
-    stop = false;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        enable = true;
+    }
 
     WaveHeader header = reader.GetHeader();
     unsigned bufferSize = static_cast<unsigned>(static_cast<unsigned long long>(header.sampleRate) * BUFFER_TIME / 1000000);
@@ -399,50 +402,64 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
 
 void Transmitter::Stop()
 {
-    stop = true;
+    std::unique_lock<std::mutex> lock(mtx);
+    enable = false;
+    lock.unlock();
+    cv.notify_all();
 }
 
 void Transmitter::TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange)
 {
-    std::vector<Sample> samples = reader.GetSamples(bufferSize, stop);
-    if (samples.empty()) {
-        return;
-    }
-
+    std::vector<Sample> samples;
     unsigned sampleOffset = 0;
-    bool eof = samples.size() < bufferSize, txStop = false;
-    std::thread transmitterThread(Transmitter::TransmitterThread, this, &output, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &txStop);
 
-    std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 2));
+    bool eof = false, stop = false, start = true;
+
+    std::thread transmitterThread(Transmitter::TransmitterThread, this, &output, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
 
     auto finally = [&]() {
         {
-            std::lock_guard<std::mutex> lock(access);
-            txStop = true;
+            std::lock_guard<std::mutex> lock(mtx);
+            stop = true;
+            cv.notify_one();
         }
         transmitterThread.join();
         samples.clear();
-        stop = true;
+        enable = false;
     };
+
     try {
-        while (!eof && !stop) {
-            {
-                std::lock_guard<std::mutex> lock(access);
-                if (txStop) {
-                    throw std::runtime_error("Transmitter thread has unexpectedly exited");
-                }
-                if (samples.empty()) {
-                    if (!reader.SetSampleOffset(sampleOffset + bufferSize)) {
-                        break;
-                    }
-                    samples = reader.GetSamples(bufferSize, stop);
-                    if (samples.empty()) {
-                        break;
-                    }
-                    eof = samples.size() < bufferSize;
-                }
+        while (!eof) {
+            std::unique_lock<std::mutex> lock(mtx);
+            if (!start) {
+                cv.wait(lock, [&]() -> bool {
+                    return samples.empty() || !enable || stop;
+                });
+            } else {
+                start = false;
             }
-            std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 2));
+            if (!enable) {
+               break;
+            }
+            if (stop) {
+                throw std::runtime_error("Transmitter thread has unexpectedly exited");
+            }
+            if (samples.empty()) {
+                if (!reader.SetSampleOffset(sampleOffset + bufferSize)) {
+                    break;
+                }
+                lock.unlock();
+                samples = reader.GetSamples(bufferSize, enable, mtx);
+                lock.lock();
+                if (samples.empty()) {
+                    break;
+                }
+                eof = samples.size() < bufferSize;
+                lock.unlock();
+                cv.notify_one();
+            } else {
+                lock.unlock();
+            }
         }
     } catch (...) {
         finally();
@@ -459,7 +476,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
 
     AllocatedMemory allocated(sizeof(uint32_t) * bufferSize + sizeof(DMAControllBlock) * (2 * bufferSize) + sizeof(uint32_t));
 
-    std::vector<Sample> samples = reader.GetSamples(bufferSize, stop);
+    std::vector<Sample> samples = reader.GetSamples(bufferSize, enable, mtx);
     if (samples.empty()) {
         return;
     }
@@ -509,11 +526,18 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         samples.clear();
-        stop = true;
+        std::lock_guard<std::mutex> lock(mtx);
+        enable = false;
     };
     try {
-        while (!eof && !stop) {
-            samples = reader.GetSamples(bufferSize, stop);
+        while (!eof) {
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                if (!enable) {
+                    break;
+                }
+            }
+            samples = reader.GetSamples(bufferSize, enable, mtx);
             if (!samples.size()) {
                 break;
             }
@@ -542,28 +566,25 @@ void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, 
 
         volatile TimerRegisters *timer = reinterpret_cast<TimerRegisters *>(peripherals.GetVirtualAddress(TIMER_BASE_OFFSET));
         uint64_t current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
-        uint64_t playbackStart = current;
+        uint64_t playbackStart = current, start = current;
 
         while (true) {
             std::vector<Sample> loadedSamples;
-            while (true) {
-                {
-                    std::lock_guard<std::mutex> lock(instance->access);
-                    if (*stop) {
-                        return;
-                    }
-                    loadedSamples = std::move(*samples);
-                    current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
-                    if (!loadedSamples.empty()) {
-                        *sampleOffset = (current - playbackStart) * sampleRate / 1000000;
-                        break;
-                    }
-                }
-                std::this_thread::sleep_for(std::chrono::microseconds(1));
-            };
 
-            uint64_t start = current;
-            unsigned offset = (current - start) * sampleRate / 1000000;
+            std::unique_lock<std::mutex> lock(instance->mtx);
+            instance->cv.wait(lock, [&]() -> bool {
+                return !samples->empty() || *stop;
+            });
+            if (*stop) {
+                break;
+            }
+            start = current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
+            *sampleOffset = (current - playbackStart) * sampleRate / 1000000;
+            loadedSamples = std::move(*samples);
+            lock.unlock();
+            instance->cv.notify_one();
+
+            unsigned offset = 0;
 
             while (true) {
                 if (offset >= loadedSamples.size()) {
@@ -573,14 +594,16 @@ void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, 
                 float value = loadedSamples[offset].GetMonoValue();
                 instance->output->SetDivisor(clockDivisor - static_cast<int>(round(value * divisorRange)));
                 while (offset == prevOffset) {
-                    std::this_thread::sleep_for(std::chrono::microseconds(1)); // asm("nop");
+                    std::this_thread::yield(); // asm("nop");
                     current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));;
                     offset = (current - start) * sampleRate / 1000000;
                 }
             }
         }
     } catch (...) {
-        std::lock_guard<std::mutex> lock(instance->access);
+        std::unique_lock<std::mutex> lock(instance->mtx);
         *stop = true;
+        lock.unlock();
+        instance->cv.notify_one();
     }
 }

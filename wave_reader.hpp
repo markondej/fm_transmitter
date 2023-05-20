@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <mutex>
 
 #define WAVE_FORMAT_PCM 0x0001
 
@@ -68,17 +69,17 @@ protected:
 class WaveReader
 {
     public:
-        WaveReader(const std::string &filename, bool &stop);
+        WaveReader(const std::string &filename, bool &enable, std::mutex &mtx);
         virtual ~WaveReader();
         WaveReader(const WaveReader &) = delete;
         WaveReader(WaveReader &&) = delete;
         WaveReader &operator=(const WaveReader &) = delete;
         std::string GetFilename() const;
         const WaveHeader &GetHeader() const;
-        std::vector<Sample> GetSamples(unsigned quantity, bool &stop);
+        std::vector<Sample> GetSamples(unsigned quantity, bool &enable, std::mutex &mtx);
         bool SetSampleOffset(unsigned offset);
     private:
-        std::vector<uint8_t> ReadData(unsigned bytesToRead, bool headerBytes, bool &stop);
+        std::vector<uint8_t> ReadData(unsigned bytesToRead, bool headerBytes, bool &enable, std::mutex &mtx);
 
         std::string filename;
         WaveHeader header;
