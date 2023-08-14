@@ -51,7 +51,6 @@
 #define BCM2711_PLLD_FREQ 750
 
 #define GPIO_BASE_OFFSET 0x00200000
-#define TIMER_BASE_OFFSET 0x00003000
 
 #define CLK0_BASE_OFFSET 0x00101070
 #define CLK1_BASE_OFFSET 0x00101078
@@ -99,16 +98,6 @@
 
 #define BUFFER_TIME 1000000
 #define PAGE_SIZE 4096
-
-struct TimerRegisters {
-    uint32_t ctlStatus;
-    uint32_t low;
-    uint32_t high;
-    uint32_t c0;
-    uint32_t c1;
-    uint32_t c2;
-    uint32_t c3;
-};
 
 struct ClockRegisters {
     uint32_t ctl;
@@ -359,6 +348,10 @@ Transmitter::Transmitter()
 }
 
 Transmitter::~Transmitter() {
+    std::unique_lock<std::mutex> lock(mtx);
+    cv.wait(lock, [&]() -> bool {
+        return !txThread.joinable() && !enable;
+    });
     if (output != nullptr) {
         delete output;
     }
@@ -386,6 +379,11 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
             delete output;
             output = nullptr;
         }
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            enable = false;
+        }
+        cv.notify_all();
     };
     try {
         if (dmaChannel != 0xff) {
@@ -406,66 +404,6 @@ void Transmitter::Stop()
     enable = false;
     lock.unlock();
     cv.notify_all();
-}
-
-void Transmitter::TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange)
-{
-    std::vector<Sample> samples;
-    unsigned sampleOffset = 0;
-
-    bool eof = false, stop = false, start = true;
-
-    std::thread transmitterThread(Transmitter::TransmitterThread, this, &output, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
-
-    auto finally = [&]() {
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            stop = true;
-            cv.notify_one();
-        }
-        transmitterThread.join();
-        samples.clear();
-        enable = false;
-    };
-
-    try {
-        while (!eof) {
-            std::unique_lock<std::mutex> lock(mtx);
-            if (!start) {
-                cv.wait(lock, [&]() -> bool {
-                    return samples.empty() || !enable || stop;
-                });
-            } else {
-                start = false;
-            }
-            if (!enable) {
-               break;
-            }
-            if (stop) {
-                throw std::runtime_error("Transmitter thread has unexpectedly exited");
-            }
-            if (samples.empty()) {
-                if (!reader.SetSampleOffset(sampleOffset + bufferSize)) {
-                    break;
-                }
-                lock.unlock();
-                samples = reader.GetSamples(bufferSize, enable, mtx);
-                lock.lock();
-                if (samples.empty()) {
-                    break;
-                }
-                eof = samples.size() < bufferSize;
-                lock.unlock();
-                cv.notify_one();
-            } else {
-                lock.unlock();
-            }
-        }
-    } catch (...) {
-        finally();
-        throw;
-    }
-    finally();
 }
 
 void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange, unsigned dmaChannel)
@@ -526,8 +464,6 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         samples.clear();
-        std::lock_guard<std::mutex> lock(mtx);
-        enable = false;
     };
     try {
         while (!eof) {
@@ -559,14 +495,69 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
     finally();
 }
 
+void Transmitter::TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange)
+{
+    std::vector<Sample> samples;
+    unsigned sampleOffset = 0;
+
+    bool eof = false, stop = false, start = true;
+
+    txThread = std::thread(Transmitter::TransmitterThread, this, &output, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
+
+    auto finally = [&]() {
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            stop = true;
+        }
+        cv.notify_all();
+        txThread.join();
+        samples.clear();
+    };
+
+    try {
+        while (!eof) {
+            std::unique_lock<std::mutex> lock(mtx);
+            if (!start) {
+                cv.wait(lock, [&]() -> bool {
+                    return samples.empty() || !enable || stop;
+                });
+            }
+            if (!enable) {
+               break;
+            }
+            if (stop) {
+                throw std::runtime_error("Transmitter thread has unexpectedly exited");
+            }
+            if (samples.empty()) {
+                if (!reader.SetSampleOffset(sampleOffset + (start ? 0 : bufferSize))) {
+                    break;
+                }
+                lock.unlock();
+                samples = reader.GetSamples(bufferSize, enable, mtx);
+                lock.lock();
+                if (samples.empty()) {
+                    break;
+                }
+                eof = samples.size() < bufferSize;
+                lock.unlock();
+                cv.notify_all();
+            } else {
+                lock.unlock();
+            }
+            start = false;
+        }
+    } catch (...) {
+        finally();
+        throw;
+    }
+    finally();
+}
+
 void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop)
 {
     try {
-        Peripherals &peripherals = Peripherals::GetInstance();
-
-        volatile TimerRegisters *timer = reinterpret_cast<TimerRegisters *>(peripherals.GetVirtualAddress(TIMER_BASE_OFFSET));
-        uint64_t current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
-        uint64_t playbackStart = current, start = current;
+        auto playbackStart = std::chrono::system_clock::now();
+        std::chrono::system_clock::time_point current, start;
 
         while (true) {
             std::vector<Sample> loadedSamples;
@@ -578,11 +569,11 @@ void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, 
             if (*stop) {
                 break;
             }
-            start = current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));
-            *sampleOffset = (current - playbackStart) * sampleRate / 1000000;
+            start = current = std::chrono::system_clock::now();
+            *sampleOffset = std::chrono::duration_cast<std::chrono::microseconds>(current - playbackStart).count() * sampleRate / 1000000;
             loadedSamples = std::move(*samples);
             lock.unlock();
-            instance->cv.notify_one();
+            instance->cv.notify_all();
 
             unsigned offset = 0;
 
@@ -595,8 +586,8 @@ void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, 
                 instance->output->SetDivisor(clockDivisor - static_cast<int>(round(value * divisorRange)));
                 while (offset == prevOffset) {
                     std::this_thread::yield(); // asm("nop");
-                    current = *(reinterpret_cast<volatile uint64_t *>(&timer->low));;
-                    offset = (current - start) * sampleRate / 1000000;
+                    current = std::chrono::system_clock::now();
+                    offset = std::chrono::duration_cast<std::chrono::microseconds>(current - start).count() * sampleRate / 1000000;
                 }
             }
         }
@@ -604,6 +595,6 @@ void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, 
         std::unique_lock<std::mutex> lock(instance->mtx);
         *stop = true;
         lock.unlock();
-        instance->cv.notify_one();
+        instance->cv.notify_all();
     }
 }

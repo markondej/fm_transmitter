@@ -171,6 +171,10 @@ std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes
     unsigned bytesRead = 0;
     std::vector<uint8_t> data;
     data.resize(bytesToRead);
+    timeval timeout = {
+        .tv_sec = 1,
+    };
+    fd_set fds;
     while (bytesRead < bytesToRead) {
         {
             std::lock_guard<std::mutex> lock(mtx);
@@ -191,7 +195,12 @@ std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes
                 data.resize(bytesRead);
                 break;
             } else {
-                std::this_thread::sleep_for(std::chrono::microseconds(1));
+                FD_ZERO(&fds);
+                FD_SET(STDIN_FILENO, &fds);
+                select(STDIN_FILENO + 1, &fds, nullptr, nullptr, &timeout);
+                if (FD_ISSET(STDIN_FILENO, &fds)) {
+                    FD_CLR(STDIN_FILENO, &fds);
+                }
             }
         }
     }
