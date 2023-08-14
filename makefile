@@ -9,8 +9,8 @@ endif
 all: fm_transmitter.o mailbox.o wave_reader.o transmitter.o
 	g++ -o $(EXECUTABLE) fm_transmitter.o mailbox.o wave_reader.o transmitter.o -L/opt/vc/lib -lm -lpthread -lbcm_host
 
-mailbox.o: mailbox.c mailbox.h
-	g++ $(FLAGS) -c mailbox.c
+mailbox.o: mailbox.cpp mailbox.hpp
+	g++ $(FLAGS) -c mailbox.cpp
 
 wave_reader.o: wave_reader.cpp wave_reader.hpp
 	g++ $(FLAGS) -c wave_reader.cpp

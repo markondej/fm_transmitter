@@ -36,7 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 
-#include "mailbox.h"
+#include "mailbox.hpp"
 
 #define PAGE_SIZE (4*1024)
 

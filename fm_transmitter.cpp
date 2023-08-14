@@ -36,7 +36,8 @@
 #include <csignal>
 #include <unistd.h>
 
-bool stop = false;
+std::mutex mtx;
+bool enable = true;
 Transmitter *transmitter = nullptr;
 
 void sigIntHandler(int sigNum)
@@ -44,7 +45,7 @@ void sigIntHandler(int sigNum)
     if (transmitter != nullptr) {
         std::cout << "Stopping..." << std::endl;
         transmitter->Stop();
-        stop = true;
+        enable = false;
     }
 }
 
@@ -97,14 +98,14 @@ int main(int argc, char** argv)
             if ((optind == argc) && loop) {
                 optind = filesOffset;
             }
-            WaveReader reader(filename != "-" ? filename : std::string(), stop);
+            WaveReader reader(filename != "-" ? filename : std::string(), enable, mtx);
             WaveHeader header = reader.GetHeader();
             std::cout << "Playing: " << reader.GetFilename() << ", "
                 << header.sampleRate << " Hz, "
                 << header.bitsPerSample << " bits, "
                 << ((header.channels > 0x01) ? "stereo" : "mono") << std::endl;
             transmitter->Transmit(reader, frequency, bandwidth, dmaChannel, optind < argc);
-        } while (!stop && (optind < argc));
+        } while (enable && (optind < argc));
     } catch (std::exception &catched) {
         std::cout << "Error: " << catched.what() << std::endl;
         result = EXIT_FAILURE;
