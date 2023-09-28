@@ -350,7 +350,7 @@ Transmitter::Transmitter()
 Transmitter::~Transmitter() {
     std::unique_lock<std::mutex> lock(mtx);
     cv.wait(lock, [&]() -> bool {
-        return !txThread.joinable() && !enable;
+        return !enable;
     });
     if (output != nullptr) {
         delete output;
@@ -362,16 +362,6 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
     {
         std::lock_guard<std::mutex> lock(mtx);
         enable = true;
-    }
-
-    WaveHeader header = reader.GetHeader();
-    unsigned bufferSize = static_cast<unsigned>(static_cast<unsigned long long>(header.sampleRate) * BUFFER_TIME / 1000000);
-
-    unsigned clockDivisor = static_cast<unsigned>(round(Peripherals::GetClockFrequency() * (0x01 << 12) / frequency));
-    unsigned divisorRange = clockDivisor - static_cast<unsigned>(round(Peripherals::GetClockFrequency() * (0x01 << 12) / (frequency + 0.0005f * bandwidth)));
-
-    if (output == nullptr) {
-        output = new ClockOutput(clockDivisor);
     }
 
     auto finally = [&]() {
@@ -386,6 +376,16 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
         cv.notify_all();
     };
     try {
+        WaveHeader header = reader.GetHeader();
+        unsigned bufferSize = static_cast<unsigned>(static_cast<unsigned long long>(header.sampleRate) * BUFFER_TIME / 1000000);
+
+        unsigned clockDivisor = static_cast<unsigned>(round(Peripherals::GetClockFrequency() * (0x01 << 12) / frequency));
+        unsigned divisorRange = clockDivisor - static_cast<unsigned>(round(Peripherals::GetClockFrequency() * (0x01 << 12) / (frequency + 0.0005f * bandwidth)));
+
+        if (output == nullptr) {
+            output = new ClockOutput(clockDivisor);
+        }
+
         if (dmaChannel != 0xff) {
             TransmitViaDma(reader, *output, header.sampleRate, bufferSize, clockDivisor, divisorRange, dmaChannel);
         } else {
