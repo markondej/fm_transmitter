@@ -365,7 +365,7 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
     }
 
     auto finally = [&]() {
-        if (!preserveCarrier) {
+        if (!preserveCarrier && (output != nullptr)) {
             delete output;
             output = nullptr;
         }
