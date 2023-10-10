@@ -87,7 +87,7 @@ int main(int argc, char** argv)
     int result = EXIT_SUCCESS;
 
     std::signal(SIGINT, sigIntHandler);
-    std::signal(SIGTSTP, sigIntHandler);
+    std::signal(SIGTERM, sigIntHandler);
 
     try {
         transmitter = new Transmitter();
