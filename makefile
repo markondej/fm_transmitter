@@ -2,7 +2,7 @@ EXECUTABLE = fm_transmitter
 VERSION = 0.9.6
 FLAGS = -Wall -O3 -std=c++11
 TRANSMITTER = -fno-strict-aliasing -I/opt/vc/include
-ifeq ($(GPIO21), 1)
+ifdef GPIO21
 	TRANSMITTER += -DGPIO21
 endif
 
