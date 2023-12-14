@@ -352,7 +352,7 @@ Transmitter::~Transmitter() {
     cv.wait(lock, [&]() -> bool {
         return !enable;
     });
-    if (output != nullptr) {
+    if (output) {
         delete output;
     }
 }
@@ -365,7 +365,7 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
     }
 
     auto finally = [&]() {
-        if (!preserveCarrier && (output != nullptr)) {
+        if (!preserveCarrier && output) {
             delete output;
             output = nullptr;
         }
@@ -382,7 +382,7 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
         unsigned clockDivisor = static_cast<unsigned>(round(Peripherals::GetClockFrequency() * (0x01 << 12) / frequency));
         unsigned divisorRange = clockDivisor - static_cast<unsigned>(round(Peripherals::GetClockFrequency() * (0x01 << 12) / (frequency + 0.0005f * bandwidth)));
 
-        if (output == nullptr) {
+        if (!output) {
             output = new ClockOutput(clockDivisor);
         }
 
