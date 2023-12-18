@@ -502,7 +502,7 @@ void Transmitter::TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned buf
 
     bool eof = false, stop = false, start = true;
 
-    txThread = std::thread(&Transmitter::TxThread, this, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
+    txThread = std::thread(&Transmitter::CpuTxThread, this, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
 
     auto finally = [&]() {
         {
@@ -553,7 +553,7 @@ void Transmitter::TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned buf
     finally();
 }
 
-void Transmitter::TxThread(unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop)
+void Transmitter::CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop)
 {
     try {
         auto playbackStart = std::chrono::system_clock::now();
