@@ -387,9 +387,9 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
         }
 
         if (dmaChannel != 0xff) {
-            TransmitViaDma(reader, *output, header.sampleRate, bufferSize, clockDivisor, divisorRange, dmaChannel);
+            TxViaDma(reader, header.sampleRate, bufferSize, clockDivisor, divisorRange, dmaChannel);
         } else {
-            TransmitViaCpu(reader, *output, header.sampleRate, bufferSize, clockDivisor, divisorRange);
+            TxViaCpu(reader, header.sampleRate, bufferSize, clockDivisor, divisorRange);
         }
     } catch (...) {
         finally();
@@ -406,7 +406,7 @@ void Transmitter::Stop()
     cv.notify_all();
 }
 
-void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange, unsigned dmaChannel)
+void Transmitter::TxViaDma(WaveReader &reader, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange, unsigned dmaChannel)
 {
     if (dmaChannel > 15) {
         throw std::runtime_error("DMA channel number out of range (0 - 15)");
@@ -438,7 +438,7 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
         clkDiv[i] = CLK_PASSWORD | (0xffffff & (clockDivisor - static_cast<int32_t>(round(value * divisorRange))));
         dmaCb[cbOffset].transferInfo = DMA_TI_NO_WIDE_BURST | DMA_TI_WAIT_RESP;;
         dmaCb[cbOffset].srcAddress = allocated.GetPhysicalAddress(&clkDiv[i]);
-        dmaCb[cbOffset].dstAddress = peripherals.GetPhysicalAddress(&output.GetDivisor());
+        dmaCb[cbOffset].dstAddress = peripherals.GetPhysicalAddress(&output->GetDivisor());
         dmaCb[cbOffset].transferLen = sizeof(uint32_t);
         dmaCb[cbOffset].stride = 0;
         dmaCb[cbOffset].nextCbAddress = allocated.GetPhysicalAddress(&dmaCb[cbOffset + 1]);
@@ -495,14 +495,14 @@ void Transmitter::TransmitViaDma(WaveReader &reader, ClockOutput &output, unsign
     finally();
 }
 
-void Transmitter::TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange)
+void Transmitter::TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange)
 {
     std::vector<Sample> samples;
     unsigned sampleOffset = 0;
 
     bool eof = false, stop = false, start = true;
 
-    txThread = std::thread(Transmitter::TransmitterThread, this, &output, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
+    txThread = std::thread(&Transmitter::TxThread, this, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
 
     auto finally = [&]() {
         {
@@ -553,7 +553,7 @@ void Transmitter::TransmitViaCpu(WaveReader &reader, ClockOutput &output, unsign
     finally();
 }
 
-void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop)
+void Transmitter::TxThread(unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop)
 {
     try {
         auto playbackStart = std::chrono::system_clock::now();
@@ -562,8 +562,8 @@ void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, 
         while (true) {
             std::vector<Sample> loadedSamples;
 
-            std::unique_lock<std::mutex> lock(instance->mtx);
-            instance->cv.wait(lock, [&]() -> bool {
+            std::unique_lock<std::mutex> lock(mtx);
+            cv.wait(lock, [&]() -> bool {
                 return !samples->empty() || *stop;
             });
             if (*stop) {
@@ -573,7 +573,7 @@ void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, 
             *sampleOffset = std::chrono::duration_cast<std::chrono::microseconds>(current - playbackStart).count() * sampleRate / 1000000;
             loadedSamples = std::move(*samples);
             lock.unlock();
-            instance->cv.notify_all();
+            cv.notify_all();
 
             unsigned offset = 0;
 
@@ -583,7 +583,7 @@ void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, 
                 }
                 unsigned prevOffset = offset;
                 float value = loadedSamples[offset].GetMonoValue();
-                instance->output->SetDivisor(clockDivisor - static_cast<int>(round(value * divisorRange)));
+                output->SetDivisor(clockDivisor - static_cast<int>(round(value * divisorRange)));
                 while (offset == prevOffset) {
                     std::this_thread::yield(); // asm("nop");
                     current = std::chrono::system_clock::now();
@@ -592,9 +592,9 @@ void Transmitter::TransmitterThread(Transmitter *instance, ClockOutput *output, 
             }
         }
     } catch (...) {
-        std::unique_lock<std::mutex> lock(instance->mtx);
+        std::unique_lock<std::mutex> lock(mtx);
         *stop = true;
         lock.unlock();
-        instance->cv.notify_all();
+        cv.notify_all();
     }
 }
