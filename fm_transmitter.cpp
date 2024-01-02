@@ -42,7 +42,7 @@ Transmitter *transmitter = nullptr;
 
 void sigIntHandler(int sigNum)
 {
-    if (transmitter != nullptr) {
+    if (transmitter) {
         std::cout << "Stopping..." << std::endl;
         transmitter->Stop();
         enable = false;
@@ -110,7 +110,7 @@ int main(int argc, char** argv)
         std::cout << "Error: " << catched.what() << std::endl;
         result = EXIT_FAILURE;
     }
-    if (transmitter != nullptr) {
+    if (transmitter) {
         auto temp = transmitter;
         transmitter = nullptr;
         delete temp;
