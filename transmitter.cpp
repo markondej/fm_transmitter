@@ -34,6 +34,7 @@
 #include "transmitter.hpp"
 #include "mailbox.hpp"
 #include <bcm_host.h>
+#include <stdexcept>
 #include <thread>
 #include <chrono>
 #include <cmath>
