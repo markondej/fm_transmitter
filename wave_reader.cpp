@@ -203,6 +203,10 @@ std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes
                 }
             }
         }
+        if (bytes == 0) {
+            data.resize(bytesRead);
+            break;
+        }
     }
 
     if (headerBytes) {
