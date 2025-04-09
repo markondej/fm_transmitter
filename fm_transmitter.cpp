@@ -95,9 +95,9 @@ int main(int argc, char** argv)
             << bandwidth << " kHz bandwidth" << std::endl;
         do {
             std::string filename = argv[optind++];
-            if ((optind == argc) && loop) {
+            if ((optind == argc) && loop)
                 optind = filesOffset;
-            }
+
             WaveReader reader(filename != "-" ? filename : std::string(), enable, mtx);
             WaveHeader header = reader.GetHeader();
             std::cout << "Playing: " << reader.GetFilename() << ", "

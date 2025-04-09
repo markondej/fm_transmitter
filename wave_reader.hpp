@@ -83,6 +83,6 @@ class WaveReader
 
         std::string filename;
         WaveHeader header;
-        unsigned dataOffset, headerOffset, currentDataOffset;
+        unsigned dataOffset;
         int fileDescriptor;
 };
