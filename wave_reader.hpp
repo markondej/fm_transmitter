@@ -79,10 +79,10 @@ class WaveReader
         std::vector<Sample> GetSamples(unsigned quantity, bool &enable, std::mutex &mtx);
         bool SetSampleOffset(unsigned offset);
     private:
-        std::vector<uint8_t> ReadData(unsigned bytesToRead, bool headerBytes, bool &enable, std::mutex &mtx);
+        unsigned ReadData(void *buffer, unsigned bytesToRead, bool &enable, std::mutex &mtx);
 
         std::string filename;
         WaveHeader header;
-        unsigned dataOffset, headerOffset, currentDataOffset;
+        unsigned dataOffset;
         int fileDescriptor;
 };

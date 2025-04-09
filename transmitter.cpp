@@ -169,21 +169,18 @@ class Peripherals
     private:
         Peripherals() {
             int memFd;
-            if ((memFd = open("/dev/mem", O_RDWR | O_SYNC)) < 0) {
+            if ((memFd = open("/dev/mem", O_RDWR | O_SYNC)) < 0)
                 throw std::runtime_error("Cannot open /dev/mem file (permission denied)");
-            }
 
             peripherals = mmap(nullptr, GetSize(), PROT_READ | PROT_WRITE, MAP_SHARED, memFd, GetVirtualBaseAddress());
             close(memFd);
-            if (peripherals == MAP_FAILED) {
+            if (peripherals == MAP_FAILED)
                 throw std::runtime_error("Cannot obtain access to peripherals (mmap error)");
-            }
         }
         unsigned GetSize() {
             unsigned size = bcm_host_get_peripheral_size();
-            if (size == BCM2711_PERI_VIRT_BASE) {
+            if (size == BCM2711_PERI_VIRT_BASE)
                 size = 0x01000000;
-            }
             return size;
         }
 
@@ -197,9 +194,8 @@ class AllocatedMemory
         AllocatedMemory(unsigned size) {
             mBoxFd = mbox_open();
             memSize = size;
-            if (memSize % PAGE_SIZE) {
+            if (memSize % PAGE_SIZE)
                 memSize = (memSize / PAGE_SIZE + 1) * PAGE_SIZE;
-            }
             memHandle = mem_alloc(mBoxFd, size, PAGE_SIZE, (Peripherals::GetVirtualBaseAddress() == BCM2835_PERI_VIRT_BASE) ? BCM2835_MEM_FLAG : BCM2711_MEM_FLAG);
             if (!memHandle) {
                 mbox_close(mBoxFd);
@@ -353,9 +349,8 @@ Transmitter::~Transmitter() {
     cv.wait(lock, [&]() -> bool {
         return !enable;
     });
-    if (output) {
+    if (output)
         delete output;
-    }
 }
 
 void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth, unsigned dmaChannel, bool preserveCarrier)
@@ -383,15 +378,13 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
         unsigned clockDivisor = static_cast<unsigned>(round(Peripherals::GetClockFrequency() * (0x01 << 12) / frequency));
         unsigned divisorRange = clockDivisor - static_cast<unsigned>(round(Peripherals::GetClockFrequency() * (0x01 << 12) / (frequency + 0.0005f * bandwidth)));
 
-        if (!output) {
+        if (!output)
             output = new ClockOutput(clockDivisor);
-        }
 
-        if (dmaChannel != 0xff) {
+        if (dmaChannel != 0xff)
             TxViaDma(reader, header.sampleRate, bufferSize, clockDivisor, divisorRange, dmaChannel);
-        } else {
+        else
             TxViaCpu(reader, header.sampleRate, bufferSize, clockDivisor, divisorRange);
-        }
     } catch (...) {
         finally();
         throw;
@@ -409,16 +402,14 @@ void Transmitter::Stop()
 
 void Transmitter::TxViaDma(WaveReader &reader, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange, unsigned dmaChannel)
 {
-    if (dmaChannel > 15) {
+    if (dmaChannel > 15)
         throw std::runtime_error("DMA channel number out of range (0 - 15)");
-    }
 
     AllocatedMemory allocated(sizeof(uint32_t) * bufferSize + sizeof(DMAControllBlock) * (2 * bufferSize) + sizeof(uint32_t));
 
     std::vector<Sample> samples = reader.GetSamples(bufferSize, enable, mtx);
-    if (samples.empty()) {
+    if (samples.empty())
         return;
-    }
 
     bool eof = false;
     if (samples.size() < bufferSize) {
@@ -461,30 +452,27 @@ void Transmitter::TxViaDma(WaveReader &reader, unsigned sampleRate, unsigned buf
 
     auto finally = [&]() {
         dmaCb[(cbOffset < 2 * bufferSize) ? cbOffset : 0].nextCbAddress = 0x00000000;
-        while (dma.GetControllBlockAddress() != 0x00000000) {
+        while (dma.GetControllBlockAddress() != 0x00000000)
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
         samples.clear();
     };
     try {
         while (!eof) {
             {
                 std::lock_guard<std::mutex> lock(mtx);
-                if (!enable) {
+                if (!enable)
                     break;
-                }
             }
             samples = reader.GetSamples(bufferSize, enable, mtx);
-            if (!samples.size()) {
+            if (!samples.size())
                 break;
-            }
+
             cbOffset = 0;
             eof = samples.size() < bufferSize;
             for (std::size_t i = 0; i < samples.size(); i++) {
                 float value = samples[i].GetMonoValue();
-                while (i == ((dma.GetControllBlockAddress() - allocated.GetPhysicalAddress(dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
+                while (i == ((dma.GetControllBlockAddress() - allocated.GetPhysicalAddress(dmaCb)) / (2 * sizeof(DMAControllBlock))))
                     std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 10));
-                }
                 clkDiv[i] = CLK_PASSWORD | (0xffffff & (clockDivisor - static_cast<int>(round(value * divisorRange))));
                 cbOffset += 2;
             }
@@ -523,28 +511,28 @@ void Transmitter::TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned buf
                     return samples.empty() || !enable || stop;
                 });
             }
-            if (!enable) {
+
+            if (!enable)
                break;
-            }
-            if (stop) {
+
+            if (stop)
                 throw std::runtime_error("Transmitter thread has unexpectedly exited");
-            }
+
             if (samples.empty()) {
-                if (!reader.SetSampleOffset(sampleOffset + (start ? 0 : bufferSize))) {
+                if (!reader.SetSampleOffset(sampleOffset + (start ? 0 : bufferSize)))
                     break;
-                }
                 lock.unlock();
                 samples = reader.GetSamples(bufferSize, enable, mtx);
                 lock.lock();
-                if (samples.empty()) {
+                if (samples.empty())
                     break;
-                }
+
                 eof = samples.size() < bufferSize;
                 lock.unlock();
                 cv.notify_all();
-            } else {
+            } else
                 lock.unlock();
-            }
+
             start = false;
         }
     } catch (...) {
@@ -567,9 +555,10 @@ void Transmitter::CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsign
             cv.wait(lock, [&]() -> bool {
                 return !samples->empty() || *stop;
             });
-            if (*stop) {
+
+            if (*stop)
                 break;
-            }
+
             start = current = std::chrono::system_clock::now();
             *sampleOffset = std::chrono::duration_cast<std::chrono::microseconds>(current - playbackStart).count() * sampleRate / 1000000;
             loadedSamples = std::move(*samples);
@@ -579,9 +568,9 @@ void Transmitter::CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsign
             unsigned offset = 0;
 
             while (true) {
-                if (offset >= loadedSamples.size()) {
+                if (offset >= loadedSamples.size())
                     break;
-                }
+
                 unsigned prevOffset = offset;
                 float value = loadedSamples[offset].GetMonoValue();
                 output->SetDivisor(clockDivisor - static_cast<int>(round(value * divisorRange)));
