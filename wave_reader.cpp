@@ -80,7 +80,7 @@ WaveReader::WaveReader(const std::string &filename, bool &enable, std::mutex &mt
         if ((std::string(reinterpret_cast<char *>(header.chunkID), 4) != std::string("RIFF")) || (std::string(reinterpret_cast<char *>(header.format), 4) != std::string("WAVE")))
             throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", WAVE file expected"));
 
-        ReadData(&header.subchunkID, sizeof(WaveHeader::subchunk1ID) + sizeof(WaveHeader::subchunk1Size), enable, mtx);
+        ReadData(&header.subchunk1ID, sizeof(WaveHeader::subchunk1ID) + sizeof(WaveHeader::subchunk1Size), enable, mtx);
         unsigned subchunk1MinSize = sizeof(WaveHeader::audioFormat) + sizeof(WaveHeader::channels) +
             sizeof(WaveHeader::sampleRate) + sizeof(WaveHeader::byteRate) + sizeof(WaveHeader::blockAlign) +
             sizeof(WaveHeader::bitsPerSample);
@@ -134,7 +134,7 @@ std::vector<Sample> WaveReader::GetSamples(unsigned quantity, bool &enable, std:
     }
 
     std::vector<uint8_t> data(bytesToRead);
-    data.resize(ReadData(data.data(), bytesToRead, enable, mtx));
+    data.resize(ReadData(&data[0], bytesToRead, enable, mtx));
     if (data.size() < bytesToRead)
         quantity = data.size() / bytesPerSample;
 
@@ -153,7 +153,7 @@ bool WaveReader::SetSampleOffset(unsigned offset) {
     return true;
 }
 
-int WaveReader::ReadData(void *buffer, unsigned bytesToRead, bool &enable, std::mutex &mtx)
+unsigned WaveReader::ReadData(void *buffer, unsigned bytesToRead, bool &enable, std::mutex &mtx)
 {
     unsigned bytesRead = 0;
     timeval timeout = {
@@ -173,10 +173,9 @@ int WaveReader::ReadData(void *buffer, unsigned bytesToRead, bool &enable, std::
         if (bytes > 0)
             bytesRead += bytes;
         if (bytesRead < bytesToRead) {
-            if (fileDescriptor != STDIN_FILENO) {
-                data.resize(bytesRead);
+            if (fileDescriptor != STDIN_FILENO)
                 break;
-            } else {
+            else {
                 FD_ZERO(&fds);
                 FD_SET(STDIN_FILENO, &fds);
                 select(STDIN_FILENO + 1, &fds, nullptr, nullptr, &timeout);
@@ -184,8 +183,6 @@ int WaveReader::ReadData(void *buffer, unsigned bytesToRead, bool &enable, std::
                     FD_CLR(STDIN_FILENO, &fds);
             }
         }
-        if (bytes == 0)
-            break;
     }
 
     return bytesRead;
