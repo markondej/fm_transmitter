@@ -170,6 +170,8 @@ unsigned WaveReader::ReadData(void *buffer, unsigned bytesToRead, bool &enable, 
         int bytes = read(fileDescriptor, &(reinterpret_cast<uint8_t *>(buffer)[bytesRead]), bytesToRead - bytesRead);
         if ((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN)))
             throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", cannot read file"));
+        if (bytes == 0)
+            break;
         if (bytes > 0)
             bytesRead += bytes;
         if (bytesRead < bytesToRead) {
