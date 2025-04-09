@@ -47,7 +47,7 @@ Sample::Sample(uint8_t *data, unsigned channels, unsigned bitsPerChannel)
     for (unsigned i = 0; i < channels; i++) {
         switch (bitsPerChannel >> 3) {
         case 2:
-            sum += (data[((i + 1) << 1) - 1] << 8) | data[((i + 1) << 1) - 2];
+            sum += *reinterpret_cast<int16_t *>(&data[i << 1]);
             break;
         case 1:
             sum += (static_cast<int16_t>(data[i]) - 0x80) << 8;
