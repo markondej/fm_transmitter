@@ -468,12 +468,11 @@ void Transmitter::TxViaDma(WaveReader &reader, unsigned sampleRate, unsigned buf
     };
     try {
         while (!eof) {
-            {
-                std::lock_guard<std::mutex> lock(mtx);
-                if (!enable) {
-                    break;
-                }
+            std::unique_lock<std::mutex> lock(mtx);
+            if (!enable) {
+                break;
             }
+            lock.unlock();
             samples = reader.GetSamples(bufferSize, enable, mtx);
             if (!samples.size()) {
                 break;
@@ -503,13 +502,12 @@ void Transmitter::TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned buf
 
     bool eof = false, stop = false, start = true;
 
-    txThread = std::thread(&Transmitter::CpuTxThread, this, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
+    std::thread txThread = std::thread(&Transmitter::CpuTxThread, this, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
 
     auto finally = [&]() {
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            stop = true;
-        }
+        std::unique_lock<std::mutex> lock(mtx);
+        stop = true;
+        lock.unlock();
         cv.notify_all();
         txThread.join();
         samples.clear();

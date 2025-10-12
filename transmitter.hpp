@@ -35,7 +35,6 @@
 
 #include "wave_reader.hpp"
 #include <condition_variable>
-#include <thread>
 
 class ClockOutput;
 
@@ -55,7 +54,6 @@ class Transmitter
         void CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop);
 
         std::condition_variable cv;
-        std::thread txThread;
         ClockOutput *output;
         std::mutex mtx;
         bool enable;
