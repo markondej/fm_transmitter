@@ -198,13 +198,13 @@ class Peripherals
             unsigned address = GetDTRanges("/proc/device-tree/soc/ranges", 4);
             if (address == 0)
                 address = GetDTRanges("/proc/device-tree/soc/ranges", 8);
-            return address == ~0 ? 0x20000000 : address;
+            return address == ~0u ? 0x20000000 : address;
         }
         static unsigned GetSize(void)
         {
             unsigned address = GetDTRanges("/proc/device-tree/soc/ranges", 4);
             address = GetDTRanges("/proc/device-tree/soc/ranges", (address == 0) ? 12 : 8);
-            return address == ~0 ? 0x01000000 : address;
+            return address == ~0u ? 0x01000000 : address;
         }
         void *peripherals;
 };
