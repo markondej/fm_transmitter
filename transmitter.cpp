@@ -33,13 +33,14 @@
 
 #include "transmitter.hpp"
 #include "mailbox.hpp"
-#include <bcm_host.h>
 #include <stdexcept>
 #include <thread>
 #include <chrono>
 #include <cmath>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <unistd.h>
+#include <cstdio>
 
 #define PERIPHERALS_PHYS_BASE 0x7e000000
 #define BCM2835_PERI_VIRT_BASE 0x20000000
@@ -161,10 +162,10 @@ class Peripherals
             return reinterpret_cast<uintptr_t>(peripherals) + offset;
         }
         static uintptr_t GetVirtualBaseAddress() {
-            return (bcm_host_get_peripheral_size() == BCM2711_PERI_VIRT_BASE) ? BCM2711_PERI_VIRT_BASE : bcm_host_get_peripheral_address();
+            return Peripherals::GetAddress();
         }
         static float GetClockFrequency() {
-            return (Peripherals::GetVirtualBaseAddress() == BCM2711_PERI_VIRT_BASE) ? BCM2711_PLLD_FREQ : BCM2835_PLLD_FREQ;
+            return (Peripherals::GetAddress() == BCM2711_PERI_VIRT_BASE) ? BCM2711_PLLD_FREQ : BCM2835_PLLD_FREQ;
         }
     private:
         Peripherals() {
@@ -173,20 +174,38 @@ class Peripherals
                 throw std::runtime_error("Cannot open /dev/mem file (permission denied)");
             }
 
-            peripherals = mmap(nullptr, GetSize(), PROT_READ | PROT_WRITE, MAP_SHARED, memFd, GetVirtualBaseAddress());
+            peripherals = mmap(nullptr, GetSize(), PROT_READ | PROT_WRITE, MAP_SHARED, memFd, GetAddress());
             close(memFd);
             if (peripherals == MAP_FAILED) {
                 throw std::runtime_error("Cannot obtain access to peripherals (mmap error)");
             }
         }
-        unsigned GetSize() {
-            unsigned size = bcm_host_get_peripheral_size();
-            if (size == BCM2711_PERI_VIRT_BASE) {
-                size = 0x01000000;
+        static unsigned GetDTRanges(const char *filename, unsigned offset) {
+            unsigned address = ~0;
+            FILE *fp = fopen(filename, "rb");
+            if (fp)
+            {
+                unsigned char buf[4];
+                fseek(fp, offset, SEEK_SET);
+                if (fread(buf, 1, sizeof buf, fp) == sizeof buf)
+                    address = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3] << 0;
+                fclose(fp);
             }
-            return size;
+            return address;
         }
-
+        static unsigned GetAddress(void)
+        {
+            unsigned address = GetDTRanges("/proc/device-tree/soc/ranges", 4);
+            if (address == 0)
+                address = GetDTRanges("/proc/device-tree/soc/ranges", 8);
+            return address == ~0 ? 0x20000000 : address;
+        }
+        static unsigned GetSize(void)
+        {
+            unsigned address = GetDTRanges("/proc/device-tree/soc/ranges", 4);
+            address = GetDTRanges("/proc/device-tree/soc/ranges", (address == 0) ? 12 : 8);
+            return address == ~0 ? 0x01000000 : address;
+        }
         void *peripherals;
 };
 
@@ -200,7 +219,7 @@ class AllocatedMemory
             if (memSize % PAGE_SIZE) {
                 memSize = (memSize / PAGE_SIZE + 1) * PAGE_SIZE;
             }
-            memHandle = mem_alloc(mBoxFd, size, PAGE_SIZE, (Peripherals::GetVirtualBaseAddress() == BCM2835_PERI_VIRT_BASE) ? BCM2835_MEM_FLAG : BCM2711_MEM_FLAG);
+            memHandle = mem_alloc(mBoxFd, size, PAGE_SIZE, (Peripherals::GetVirtualBaseAddress() == BCM2711_PERI_VIRT_BASE) ? BCM2711_MEM_FLAG : BCM2835_MEM_FLAG);
             if (!memHandle) {
                 mbox_close(mBoxFd);
                 memSize = 0;
