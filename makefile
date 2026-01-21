@@ -1,13 +1,13 @@
 EXECUTABLE = fm_transmitter
 VERSION = 0.9.6
 FLAGS = -Wall -O3 -std=c++11
-TRANSMITTER = -fno-strict-aliasing -I/opt/vc/include
+TRANSMITTER = -fno-strict-aliasing
 ifdef GPIO21
 	TRANSMITTER += -DGPIO21
 endif
 
 all: fm_transmitter.o mailbox.o wave_reader.o transmitter.o
-	g++ -o $(EXECUTABLE) fm_transmitter.o mailbox.o wave_reader.o transmitter.o -L/opt/vc/lib -lm -lpthread -lbcm_host
+	g++ -o $(EXECUTABLE) fm_transmitter.o mailbox.o wave_reader.o transmitter.o -lm -lpthread
 
 mailbox.o: mailbox.cpp mailbox.hpp
 	g++ $(FLAGS) -c mailbox.cpp
