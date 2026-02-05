@@ -45,6 +45,7 @@ void sigIntHandler(int sigNum)
     if (transmitter) {
         std::cout << "Stopping..." << std::endl;
         transmitter->Stop();
+	std::unique_lock<std::mutex> lock(mtx);
         enable = false;
     }
 }
@@ -71,7 +72,7 @@ int main(int argc, char** argv)
                 bandwidth = std::stof(optarg);
                 break;
             case 'v':
-                std::cout << EXECUTABLE << " version: " << VERSION << std::endl;
+                std::cout << argv[0] << " version: " << VERSION << std::endl;
                 return 0;
         }
     }
@@ -80,7 +81,7 @@ int main(int argc, char** argv)
         showUsage = false;
     }
     if (showUsage) {
-        std::cout << "Usage: " << EXECUTABLE << " [-f <frequency>] [-b <bandwidth>] [-d <dma_channel>] [-r] <file>" << std::endl;
+        std::cout << "Usage: " << argv[0] << " [-f <frequency>] [-b <bandwidth>] [-d <dma_channel>] [-r] <file>" << std::endl;
         return 0;
     }
 
@@ -107,7 +108,7 @@ int main(int argc, char** argv)
             transmitter->Transmit(reader, frequency, bandwidth, dmaChannel, optind < argc);
         } while (enable && (optind < argc));
     } catch (std::exception &catched) {
-        std::cout << "Error: " << catched.what() << std::endl;
+        std::cerr << "Error: " << catched.what() << std::endl;
         result = EXIT_FAILURE;
     }
     if (transmitter) {

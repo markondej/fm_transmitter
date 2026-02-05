@@ -176,12 +176,11 @@ std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes
     };
     fd_set fds;
     while (bytesRead < bytesToRead) {
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            if (!enable) {
-                break;
-            }
+        std::unique_lock<std::mutex> unique(mtx);
+        if (!enable) {
+            break;
         }
+        unique.unlock();
         int bytes = read(fileDescriptor, &data[bytesRead], bytesToRead - bytesRead);
         if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
             ((static_cast<unsigned>(bytes) < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
@@ -209,22 +208,19 @@ std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes
         }
     }
 
+    std::unique_lock<std::mutex> unique(mtx);
     if (headerBytes) {
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            if (!enable) {
-                throw std::runtime_error("Cannot obtain header, program interrupted");
-            }
+        if (!enable) {
+            throw std::runtime_error("Cannot obtain header, program interrupted");
         }
+        unique.unlock();
         std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], data.data(), bytesRead);
         headerOffset += bytesRead;
     } else {
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            if (!enable) {
-                data.resize(bytesRead);
-            }
+        if (!enable) {
+            data.resize(bytesRead);
         }
+        unique.unlock();
         currentDataOffset += bytesRead;
     }
 

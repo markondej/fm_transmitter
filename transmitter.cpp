@@ -32,7 +32,9 @@
 */
 
 #include "transmitter.hpp"
-#include "mailbox.hpp"
+extern "C" {
+   #include "mailbox.h"
+}
 #include <stdexcept>
 #include <thread>
 #include <chrono>
@@ -183,8 +185,7 @@ class Peripherals
         static unsigned GetDTRanges(const char *filename, unsigned offset) {
             unsigned address = ~0;
             FILE *fp = fopen(filename, "rb");
-            if (fp)
-            {
+            if (fp) {
                 unsigned char buf[4];
                 fseek(fp, offset, SEEK_SET);
                 if (fread(buf, 1, sizeof buf, fp) == sizeof buf)
@@ -524,9 +525,9 @@ void Transmitter::TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned buf
     std::thread txThread = std::thread(&Transmitter::CpuTxThread, this, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
 
     auto finally = [&]() {
-        std::unique_lock<std::mutex> lock(mtx);
+        std::unique_lock<std::mutex> unique(mtx);
         stop = true;
-        lock.unlock();
+        unique.unlock();
         cv.notify_all();
         txThread.join();
         samples.clear();
@@ -534,9 +535,9 @@ void Transmitter::TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned buf
 
     try {
         while (!eof) {
-            std::unique_lock<std::mutex> lock(mtx);
+            std::unique_lock<std::mutex> unique(mtx);
             if (!start) {
-                cv.wait(lock, [&]() -> bool {
+                cv.wait(unique, [&]() -> bool {
                     return samples.empty() || !enable || stop;
                 });
             }
@@ -550,17 +551,17 @@ void Transmitter::TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned buf
                 if (!reader.SetSampleOffset(sampleOffset + (start ? 0 : bufferSize))) {
                     break;
                 }
-                lock.unlock();
+                unique.unlock();
                 samples = reader.GetSamples(bufferSize, enable, mtx);
-                lock.lock();
+                unique.lock();
                 if (samples.empty()) {
                     break;
                 }
                 eof = samples.size() < bufferSize;
-                lock.unlock();
+                unique.unlock();
                 cv.notify_all();
             } else {
-                lock.unlock();
+                unique.unlock();
             }
             start = false;
         }
@@ -580,8 +581,8 @@ void Transmitter::CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsign
         while (true) {
             std::vector<Sample> loadedSamples;
 
-            std::unique_lock<std::mutex> lock(mtx);
-            cv.wait(lock, [&]() -> bool {
+            std::unique_lock<std::mutex> unique(mtx);
+            cv.wait(unique, [&]() -> bool {
                 return !samples->empty() || *stop;
             });
             if (*stop) {
@@ -590,7 +591,7 @@ void Transmitter::CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsign
             start = current = std::chrono::system_clock::now();
             *sampleOffset = std::chrono::duration_cast<std::chrono::microseconds>(current - playbackStart).count() * sampleRate / 1000000;
             loadedSamples = std::move(*samples);
-            lock.unlock();
+            unique.unlock();
             cv.notify_all();
 
             unsigned offset = 0;
@@ -610,9 +611,9 @@ void Transmitter::CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsign
             }
         }
     } catch (...) {
-        std::unique_lock<std::mutex> lock(mtx);
+        std::unique_lock<std::mutex> unique(mtx);
         *stop = true;
-        lock.unlock();
+        unique.unlock();
         cv.notify_all();
     }
 }
