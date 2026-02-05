@@ -42,11 +42,11 @@ extern "C" {
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <cstdio>
 
 #define PERIPHERALS_PHYS_BASE 0x7e000000
 #define BCM2835_PERI_VIRT_BASE 0x20000000
 #define BCM2711_PERI_VIRT_BASE 0xfe000000
+#define PERIPHERALS_SIZE 0x01000000
 
 #define BCM2835_MEM_FLAG 0x0c
 #define BCM2711_MEM_FLAG 0x04
@@ -164,7 +164,7 @@ class Peripherals
             return reinterpret_cast<uintptr_t>(peripherals) + offset;
         }
         static uintptr_t GetVirtualBaseAddress() {
-            return Peripherals::GetAddress();
+            return static_cast<uintptr_t>(Peripherals::GetAddress());
         }
         static float GetClockFrequency() {
             return (Peripherals::GetAddress() == BCM2711_PERI_VIRT_BASE) ? BCM2711_PLLD_FREQ : BCM2835_PLLD_FREQ;
@@ -182,30 +182,30 @@ class Peripherals
                 throw std::runtime_error("Cannot obtain access to peripherals (mmap error)");
             }
         }
-        static unsigned GetDTRanges(const char *filename, unsigned offset) {
-            unsigned address = ~0;
-            FILE *fp = fopen(filename, "rb");
-            if (fp) {
-                unsigned char buf[4];
-                fseek(fp, offset, SEEK_SET);
-                if (fread(buf, 1, sizeof buf, fp) == sizeof buf)
-                    address = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3] << 0;
-                fclose(fp);
+        static uint32_t GetDTRanges(const std::string &filename, unsigned offset) {
+            uint32_t address = ~0;
+            int fd = open(filename.c_str(), O_RDONLY);
+            if (fd != -1) {
+                uint8_t buffer[4];
+                lseek(fd, offset, SEEK_SET);
+                if (read(fd, buffer, sizeof(buffer)) == sizeof(buffer)) {
+                    address = buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3] << 0;
+                }
+                close(fd);
             }
             return address;
         }
-        static unsigned GetAddress(void)
-        {
-            unsigned address = GetDTRanges("/proc/device-tree/soc/ranges", 4);
-            if (address == 0)
+        static uint32_t GetAddress() {
+            uint32_t address = GetDTRanges("/proc/device-tree/soc/ranges", 4);
+            if (!address) {
                 address = GetDTRanges("/proc/device-tree/soc/ranges", 8);
-            return address == ~0u ? 0x20000000 : address;
+            }
+            return (address == ~0u) ? BCM2835_PERI_VIRT_BASE : address;
         }
-        static unsigned GetSize(void)
-        {
-            unsigned address = GetDTRanges("/proc/device-tree/soc/ranges", 4);
-            address = GetDTRanges("/proc/device-tree/soc/ranges", (address == 0) ? 12 : 8);
-            return address == ~0u ? 0x01000000 : address;
+        static uint32_t GetSize() {
+            uint32_t address = GetDTRanges("/proc/device-tree/soc/ranges", 4);
+            address = GetDTRanges("/proc/device-tree/soc/ranges", (!address) ? 12 : 8);
+            return (address == ~0u) ? PERIPHERALS_SIZE : address;
         }
         void *peripherals;
 };

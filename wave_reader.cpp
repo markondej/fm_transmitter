@@ -69,20 +69,20 @@ WaveReader::WaveReader(const std::string &filename, bool &enable, std::mutex &mt
     filename(filename), headerOffset(0), currentDataOffset(0)
 {
     if (!filename.empty()) {
-        fileDescriptor = open(filename.c_str(), O_RDONLY);
+        fd = open(filename.c_str(), O_RDONLY);
     } else {
         fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL, 0) | O_NONBLOCK);
-        fileDescriptor = STDIN_FILENO;
+        fd = STDIN_FILENO;
     }
 
-    if (fileDescriptor == -1) {
+    if (fd == -1) {
         throw std::runtime_error(std::string("Cannot open ") + GetFilename() + std::string(", file does not exist"));
     }
 
     try {
         ReadData(sizeof(WaveHeader::chunkID) + sizeof(WaveHeader::chunkSize) + sizeof(WaveHeader::format), true, enable, mtx);
         if ((std::string(reinterpret_cast<char *>(header.chunkID), 4) != std::string("RIFF")) || (std::string(reinterpret_cast<char *>(header.format), 4) != std::string("WAVE"))) {
-            throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", WAVE file expected"));
+            throw std::runtime_error("Error while reading " + GetFilename() + ", WAVE file expected");
         }
 
         ReadData(sizeof(WaveHeader::subchunk1ID) + sizeof(WaveHeader::subchunk1Size), true, enable, mtx);
@@ -90,7 +90,7 @@ WaveReader::WaveReader(const std::string &filename, bool &enable, std::mutex &mt
             sizeof(WaveHeader::sampleRate) + sizeof(WaveHeader::byteRate) + sizeof(WaveHeader::blockAlign) +
             sizeof(WaveHeader::bitsPerSample);
         if ((std::string(reinterpret_cast<char *>(header.subchunk1ID), 4) != std::string("fmt ")) || (header.subchunk1Size < subchunk1MinSize)) {
-            throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", data corrupted"));
+            throw std::runtime_error("Error while reading " + GetFilename() + ", data corrupted");
         }
 
         ReadData(header.subchunk1Size, true, enable, mtx);
@@ -98,35 +98,35 @@ WaveReader::WaveReader(const std::string &filename, bool &enable, std::mutex &mt
             (header.byteRate != (header.bitsPerSample >> 3) * header.channels * header.sampleRate) ||
             (header.blockAlign != (header.bitsPerSample >> 3) * header.channels) ||
             (((header.bitsPerSample >> 3) != 1) && ((header.bitsPerSample >> 3) != 2))) {
-            throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", unsupported WAVE format"));
+            throw std::runtime_error("Error while reading " + GetFilename() + ", unsupported WAVE format");
         }
 
         ReadData(sizeof(WaveHeader::subchunk2ID) + sizeof(WaveHeader::subchunk2Size), true, enable, mtx);
         if (std::string(reinterpret_cast<char *>(header.subchunk2ID), 4) != std::string("data")) {
-            throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", data corrupted"));
+            throw std::runtime_error("Error while opening " + GetFilename() + ", data corrupted");
         }
     } catch (...) {
-        if (fileDescriptor != STDIN_FILENO) {
-            close(fileDescriptor);
+        if (fd != STDIN_FILENO) {
+            close(fd);
         }
         throw;
     }
 
-    if (fileDescriptor != STDIN_FILENO) {
-        dataOffset = lseek(fileDescriptor, 0, SEEK_CUR);
+    if (fd != STDIN_FILENO) {
+        dataOffset = lseek(fd, 0, SEEK_CUR);
     }
 }
 
 WaveReader::~WaveReader()
 {
-    if (fileDescriptor != STDIN_FILENO) {
-        close(fileDescriptor);
+    if (fd != STDIN_FILENO) {
+        close(fd);
     }
 }
 
 std::string WaveReader::GetFilename() const
 {
-    return fileDescriptor != STDIN_FILENO ? filename : "STDIN";
+    return fd != STDIN_FILENO ? filename : "STDIN";
 }
 
 const WaveHeader &WaveReader::GetHeader() const
@@ -157,9 +157,9 @@ std::vector<Sample> WaveReader::GetSamples(unsigned quantity, bool &enable, std:
 }
 
 bool WaveReader::SetSampleOffset(unsigned offset) {
-    if (fileDescriptor != STDIN_FILENO) {
+    if (fd != STDIN_FILENO) {
         currentDataOffset = offset * (header.bitsPerSample >> 3) * header.channels;
-        if (lseek(fileDescriptor, dataOffset + currentDataOffset, SEEK_SET) == -1) {
+        if (lseek(fd, dataOffset + currentDataOffset, SEEK_SET) == -1) {
             return false;
         }
     }
@@ -171,56 +171,50 @@ std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes
     unsigned bytesRead = 0;
     std::vector<uint8_t> data;
     data.resize(bytesToRead);
-    timeval timeout = {
-        .tv_sec = 1,
-    };
-    fd_set fds;
+
     while (bytesRead < bytesToRead) {
         std::unique_lock<std::mutex> unique(mtx);
         if (!enable) {
+            if (headerBytes) {
+                throw std::runtime_error("Failed to read header, operation aborted");
+            }
+            data.resize(bytesRead);
             break;
         }
         unique.unlock();
-        int bytes = read(fileDescriptor, &data[bytesRead], bytesToRead - bytesRead);
-        if (((bytes == -1) && ((fileDescriptor != STDIN_FILENO) || (errno != EAGAIN))) ||
-            ((static_cast<unsigned>(bytes) < bytesToRead) && headerBytes && (fileDescriptor != STDIN_FILENO))) {
-            throw std::runtime_error(std::string("Error while opening ") + GetFilename() + std::string(", data corrupted"));
+        int bytes = read(fd, &data[bytesRead], bytesToRead - bytesRead);
+        if ((bytes == -1) && (errno != EAGAIN) && (errno != EINTR)) {
+            throw std::runtime_error("Error while reading " + GetFilename() + ", operation failed");
         }
         if (bytes > 0) {
             bytesRead += bytes;
         }
         if (bytesRead < bytesToRead) {
-            if (fileDescriptor != STDIN_FILENO) {
+            if (fd != STDIN_FILENO) {
                 data.resize(bytesRead);
                 break;
             } else {
+                timeval timeout = { .tv_sec = 1, };
+
+                fd_set fds;
                 FD_ZERO(&fds);
                 FD_SET(STDIN_FILENO, &fds);
                 select(STDIN_FILENO + 1, &fds, nullptr, nullptr, &timeout);
-                if (FD_ISSET(STDIN_FILENO, &fds)) {
-                    FD_CLR(STDIN_FILENO, &fds);
+                if (!FD_ISSET(STDIN_FILENO, &fds)) {
+                    data.resize(bytesRead);
+                    break;
                 }
             }
         }
-        if (bytes == 0) {
-            data.resize(bytesRead);
-            break;
-        }
     }
 
-    std::unique_lock<std::mutex> unique(mtx);
     if (headerBytes) {
-        if (!enable) {
-            throw std::runtime_error("Cannot obtain header, program interrupted");
+        if (bytesRead < bytesToRead) {
+            throw std::runtime_error("Failed to read header, data corrupted");
         }
-        unique.unlock();
         std::memcpy(&(reinterpret_cast<uint8_t *>(&header))[headerOffset], data.data(), bytesRead);
         headerOffset += bytesRead;
     } else {
-        if (!enable) {
-            data.resize(bytesRead);
-        }
-        unique.unlock();
         currentDataOffset += bytesRead;
     }
 
