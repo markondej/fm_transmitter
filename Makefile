@@ -14,7 +14,7 @@ ifdef GPIO21
 	TRANSMITTER += -DGPIO21
 endif
 
-.PHONY: all clean
+.PHONY: clean
 
 $(BINARY): $(OBJS)
 	$(CXX) -o $(BINARY) $(OBJS) $(LIBS)
