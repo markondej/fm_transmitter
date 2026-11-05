@@ -62,7 +62,7 @@ float Sample::GetMonoValue() const
     return value;
 }
 
-WaveReader::WaveReader(const std::string &filename, bool &enable, std::mutex &mtx) :
+WaveReader::WaveReader(const std::string &filename, std::atomic<bool> &stop) :
     filename(filename), headerOffset(0), currentDataOffset(0)
 {
     if (!filename.empty()) {
@@ -77,12 +77,12 @@ WaveReader::WaveReader(const std::string &filename, bool &enable, std::mutex &mt
     }
 
     try {
-        ReadData(sizeof(WaveHeader::chunkID) + sizeof(WaveHeader::chunkSize) + sizeof(WaveHeader::format), true, enable, mtx);
+        ReadData(sizeof(WaveHeader::chunkID) + sizeof(WaveHeader::chunkSize) + sizeof(WaveHeader::format), true, stop);
         if ((std::string(reinterpret_cast<char *>(header.chunkID), 4) != std::string("RIFF")) || (std::string(reinterpret_cast<char *>(header.format), 4) != std::string("WAVE"))) {
             throw std::runtime_error("Error while reading " + GetFilename() + ", WAVE file expected");
         }
 
-        ReadData(sizeof(WaveHeader::subchunk1ID) + sizeof(WaveHeader::subchunk1Size), true, enable, mtx);
+        ReadData(sizeof(WaveHeader::subchunk1ID) + sizeof(WaveHeader::subchunk1Size), true, stop);
         unsigned subchunk1MinSize = sizeof(WaveHeader::audioFormat) + sizeof(WaveHeader::channels) +
             sizeof(WaveHeader::sampleRate) + sizeof(WaveHeader::byteRate) + sizeof(WaveHeader::blockAlign) +
             sizeof(WaveHeader::bitsPerSample);
@@ -90,7 +90,7 @@ WaveReader::WaveReader(const std::string &filename, bool &enable, std::mutex &mt
             throw std::runtime_error("Error while reading " + GetFilename() + ", data corrupted");
         }
 
-        ReadData(header.subchunk1Size, true, enable, mtx);
+        ReadData(header.subchunk1Size, true, stop);
         if ((header.audioFormat != WAVE_FORMAT_PCM) ||
             (header.byteRate != (header.bitsPerSample >> 3) * header.channels * header.sampleRate) ||
             (header.blockAlign != (header.bitsPerSample >> 3) * header.channels) ||
@@ -98,7 +98,7 @@ WaveReader::WaveReader(const std::string &filename, bool &enable, std::mutex &mt
             throw std::runtime_error("Error while reading " + GetFilename() + ", unsupported WAVE format");
         }
 
-        ReadData(sizeof(WaveHeader::subchunk2ID) + sizeof(WaveHeader::subchunk2Size), true, enable, mtx);
+        ReadData(sizeof(WaveHeader::subchunk2ID) + sizeof(WaveHeader::subchunk2Size), true, stop);
         if (std::string(reinterpret_cast<char *>(header.subchunk2ID), 4) != std::string("data")) {
             throw std::runtime_error("Error while opening " + GetFilename() + ", data corrupted");
         }
@@ -131,7 +131,7 @@ const WaveHeader &WaveReader::GetHeader() const
     return header;
 }
 
-std::vector<Sample> WaveReader::GetSamples(unsigned quantity, bool &enable, std::mutex &mtx) {
+std::vector<Sample> WaveReader::GetSamples(unsigned quantity, std::atomic<bool> &stop) {
     unsigned bytesPerSample = (header.bitsPerSample >> 3) * header.channels;
     unsigned bytesToRead = quantity * bytesPerSample;
     unsigned bytesLeft = header.subchunk2Size - currentDataOffset;
@@ -140,7 +140,7 @@ std::vector<Sample> WaveReader::GetSamples(unsigned quantity, bool &enable, std:
         quantity = bytesToRead / bytesPerSample;
     }
 
-    std::vector<uint8_t> data = ReadData(bytesToRead, false, enable, mtx);
+    std::vector<uint8_t> data = ReadData(bytesToRead, false, stop);
     if (data.size() < bytesToRead) {
         quantity = data.size() / bytesPerSample;
     }
@@ -163,22 +163,20 @@ bool WaveReader::SetSampleOffset(unsigned offset) {
     return true;
 }
 
-std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes, bool &enable, std::mutex &mtx)
+std::vector<uint8_t> WaveReader::ReadData(unsigned bytesToRead, bool headerBytes, std::atomic<bool> &stop)
 {
     unsigned bytesRead = 0;
     std::vector<uint8_t> data;
     data.resize(bytesToRead);
 
     while (bytesRead < bytesToRead) {
-        std::unique_lock<std::mutex> unique(mtx);
-        if (!enable) {
+        if (stop.load()) {
             if (headerBytes) {
                 throw std::runtime_error("Failed to read header, operation aborted");
             }
             data.resize(bytesRead);
             break;
         }
-        unique.unlock();
         int bytes = read(fd, &data[bytesRead], bytesToRead - bytesRead);
         if ((bytes == -1) && (errno != EAGAIN) && (errno != EINTR)) {
             throw std::runtime_error("Error while reading " + GetFilename() + ", operation failed");

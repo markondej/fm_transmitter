@@ -7,7 +7,7 @@ OBJS = mailbox.o wave_reader.o transmitter.o fm_transmitter.o
 LIBS = -lm -lpthread
 BINARY = fm_transmitter
 
-VERSION = 0.9.7
+VERSION = 0.9.8
 DEFINES = -DVERSION=\"$(VERSION)\"
 
 ifdef GPIO21

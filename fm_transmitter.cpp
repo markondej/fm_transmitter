@@ -34,20 +34,18 @@
 #include "transmitter.hpp"
 #include <iostream>
 #include <csignal>
+#include <atomic>
 #include <unistd.h>
 
-std::mutex mtx;
-bool enable = true;
-Transmitter *transmitter = nullptr;
+#ifndef VERSION
+#define VERSION "0.9.0"
+#endif
+
+std::atomic<bool> stop(false);
 
 void sigIntHandler(int sigNum)
 {
-    if (transmitter) {
-        std::cout << "Stopping..." << std::endl;
-        transmitter->Stop();
-	std::unique_lock<std::mutex> lock(mtx);
-        enable = false;
-    }
+    stop.store(true);
 }
 
 int main(int argc, char** argv)
@@ -91,7 +89,7 @@ int main(int argc, char** argv)
     std::signal(SIGTERM, sigIntHandler);
 
     try {
-        transmitter = new Transmitter();
+        Transmitter transmitter(stop);
         std::cout << "Broadcasting at " << frequency << " MHz with "
             << bandwidth << " kHz bandwidth" << std::endl;
         do {
@@ -99,22 +97,17 @@ int main(int argc, char** argv)
             if ((optind == argc) && loop) {
                 optind = filesOffset;
             }
-            WaveReader reader(filename != "-" ? filename : std::string(), enable, mtx);
+            WaveReader reader(filename != "-" ? filename : std::string(), stop);
             WaveHeader header = reader.GetHeader();
             std::cout << "Playing: " << reader.GetFilename() << ", "
                 << header.sampleRate << " Hz, "
                 << header.bitsPerSample << " bits, "
                 << ((header.channels > 0x01) ? "stereo" : "mono") << std::endl;
-            transmitter->Transmit(reader, frequency, bandwidth, dmaChannel, optind < argc);
-        } while (enable && (optind < argc));
+            transmitter.Transmit(reader, frequency, bandwidth, dmaChannel, optind < argc);
+        } while (!stop.load() && (optind < argc));
     } catch (std::exception &catched) {
         std::cerr << "Error: " << catched.what() << std::endl;
         result = EXIT_FAILURE;
-    }
-    if (transmitter) {
-        auto temp = transmitter;
-        transmitter = nullptr;
-        delete temp;
     }
 
     return result;

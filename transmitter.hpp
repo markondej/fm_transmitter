@@ -34,7 +34,7 @@
 #pragma once
 
 #include "wave_reader.hpp"
-#include <condition_variable>
+#include <atomic>
 
 class ClockOutput;
 
@@ -42,6 +42,7 @@ class Transmitter
 {
     public:
         Transmitter();
+        Transmitter(std::atomic<bool> &stop);
         virtual ~Transmitter();
         Transmitter(const Transmitter &) = delete;
         Transmitter(Transmitter &&) = delete;
@@ -51,10 +52,8 @@ class Transmitter
     private:
         void TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange);
         void TxViaDma(WaveReader &reader, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange, unsigned dmaChannel);
-        void CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop);
+        void CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, void *buffer, std::atomic<bool> *exit);
 
-        std::condition_variable cv;
+        std::atomic<bool> *stop, internal, enabled;
         ClockOutput *output;
-        std::mutex mtx;
-        bool enable;
 };

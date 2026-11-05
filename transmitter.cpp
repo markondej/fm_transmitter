@@ -35,9 +35,11 @@
 extern "C" {
    #include "mailbox.h"
 }
+#include <condition_variable>
 #include <stdexcept>
 #include <thread>
 #include <chrono>
+#include <mutex>
 #include <cmath>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -102,6 +104,8 @@ extern "C" {
 
 #define BUFFER_TIME 1000000
 #define PAGE_SIZE 4096
+
+#define TRANSMITTER_CTRL_INTERVAL std::chrono::microseconds(BUFFER_TIME / 10)
 
 struct ClockRegisters {
     uint32_t ctl;
@@ -364,15 +368,24 @@ class DMAController : public Device
 };
 
 Transmitter::Transmitter()
-    : output(nullptr), enable(false)
+    : internal(false), enabled(false), output(nullptr)
 {
+    stop = &internal;
+}
+
+Transmitter::Transmitter(std::atomic<bool> &stop)
+    : Transmitter()
+{
+    this->stop = &stop;
 }
 
 Transmitter::~Transmitter() {
-    std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, [&]() -> bool {
-        return !enable;
-    });
+    Stop();
+
+    while (enabled.load()) {
+        std::this_thread::sleep_for(TRANSMITTER_CTRL_INTERVAL);
+    }
+
     if (output) {
         delete output;
     }
@@ -380,21 +393,17 @@ Transmitter::~Transmitter() {
 
 void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth, unsigned dmaChannel, bool preserveCarrier)
 {
-    {
-        std::lock_guard<std::mutex> lock(mtx);
-        enable = true;
-    }
+    if (enabled.exchange(true))
+        throw std::runtime_error("Transmitter already active");
+
+    internal.store(false);
 
     auto finally = [&]() {
         if (!preserveCarrier && output) {
             delete output;
             output = nullptr;
         }
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            enable = false;
-        }
-        cv.notify_all();
+        enabled.store(false);
     };
     try {
         WaveHeader header = reader.GetHeader();
@@ -421,10 +430,7 @@ void Transmitter::Transmit(WaveReader &reader, float frequency, float bandwidth,
 
 void Transmitter::Stop()
 {
-    std::unique_lock<std::mutex> lock(mtx);
-    enable = false;
-    lock.unlock();
-    cv.notify_all();
+    stop->store(true);
 }
 
 void Transmitter::TxViaDma(WaveReader &reader, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange, unsigned dmaChannel)
@@ -435,15 +441,13 @@ void Transmitter::TxViaDma(WaveReader &reader, unsigned sampleRate, unsigned buf
 
     AllocatedMemory allocated(sizeof(uint32_t) * bufferSize + sizeof(DMAControllBlock) * (2 * bufferSize) + sizeof(uint32_t));
 
-    std::vector<Sample> samples = reader.GetSamples(bufferSize, enable, mtx);
+    std::vector<Sample> samples = reader.GetSamples(bufferSize, *stop);
     if (samples.empty()) {
         return;
     }
 
-    bool eof = false;
     if (samples.size() < bufferSize) {
         bufferSize = samples.size();
-        eof = true;
     }
 
     PWMController pwm(sampleRate);
@@ -477,32 +481,29 @@ void Transmitter::TxViaDma(WaveReader &reader, unsigned sampleRate, unsigned buf
 
     DMAController dma(allocated.GetPhysicalAddress(dmaCb), dmaChannel);
 
-    std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 10));
+    std::this_thread::sleep_for(TRANSMITTER_CTRL_INTERVAL);
 
     auto finally = [&]() {
-        dmaCb[(cbOffset < 2 * bufferSize) ? cbOffset : 0].nextCbAddress = 0x00000000;
+        dmaCb[cbOffset - 1].nextCbAddress = 0x00000000;
         while (dma.GetControllBlockAddress() != 0x00000000) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            std::this_thread::sleep_for(TRANSMITTER_CTRL_INTERVAL);
         }
         samples.clear();
     };
     try {
-        while (!eof) {
-            std::unique_lock<std::mutex> lock(mtx);
-            if (!enable) {
+        while (true) {
+            if (stop->load()) {
                 break;
             }
-            lock.unlock();
-            samples = reader.GetSamples(bufferSize, enable, mtx);
-            if (!samples.size()) {
+            samples = reader.GetSamples(bufferSize, *stop);
+            if (samples.empty()) {
                 break;
             }
             cbOffset = 0;
-            eof = samples.size() < bufferSize;
             for (std::size_t i = 0; i < samples.size(); i++) {
                 float value = samples[i].GetMonoValue();
-                while (i == ((dma.GetControllBlockAddress() - allocated.GetPhysicalAddress(dmaCb)) / (2 * sizeof(DMAControllBlock)))) {
-                    std::this_thread::sleep_for(std::chrono::microseconds(BUFFER_TIME / 10));
+                while (i == (dma.GetControllBlockAddress() - allocated.GetPhysicalAddress(dmaCb)) / (2 * sizeof(DMAControllBlock))) {
+                    std::this_thread::sleep_for(TRANSMITTER_CTRL_INTERVAL);
                 }
                 clkDiv[i] = CLK_PASSWORD | (0xffffff & (clockDivisor - static_cast<int>(round(value * divisorRange))));
                 cbOffset += 2;
@@ -515,55 +516,59 @@ void Transmitter::TxViaDma(WaveReader &reader, unsigned sampleRate, unsigned buf
     finally();
 }
 
+struct BufferCtrl {
+    unsigned sampleOffset;
+    std::vector<Sample> samples;
+    std::condition_variable cv;
+    std::mutex mtx;
+};
+
 void Transmitter::TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned bufferSize, unsigned clockDivisor, unsigned divisorRange)
 {
-    std::vector<Sample> samples;
-    unsigned sampleOffset = 0;
+    BufferCtrl ctrl = {
+        .sampleOffset = 0,
+    };
 
-    bool eof = false, stop = false, start = true;
+    bool begin = true;
+    std::atomic<bool> exit(false);
 
-    std::thread txThread = std::thread(&Transmitter::CpuTxThread, this, sampleRate, clockDivisor, divisorRange, &sampleOffset, &samples, &stop);
+    std::thread txThread = std::thread(&Transmitter::CpuTxThread, this, sampleRate, clockDivisor, divisorRange, &ctrl, &exit);
 
     auto finally = [&]() {
-        std::unique_lock<std::mutex> unique(mtx);
-        stop = true;
-        unique.unlock();
-        cv.notify_all();
+        exit.store(true);
+        ctrl.cv.notify_all();
         txThread.join();
-        samples.clear();
     };
 
     try {
-        while (!eof) {
-            std::unique_lock<std::mutex> unique(mtx);
-            if (!start) {
-                cv.wait(unique, [&]() -> bool {
-                    return samples.empty() || !enable || stop;
-                });
+        while (true) {
+            bool stopped = false, exited = false;
+            std::unique_lock<std::mutex> unique(ctrl.mtx);
+            ctrl.cv.wait_for(unique, TRANSMITTER_CTRL_INTERVAL, [&]() -> bool {
+                return ctrl.samples.empty() || (stopped = stop->load()) || (exited = exit.load());
+            });
+            if (stopped) {
+                break;
             }
-            if (!enable) {
-               break;
-            }
-            if (stop) {
+            if (exited) {
                 throw std::runtime_error("Transmitter thread has unexpectedly exited");
             }
-            if (samples.empty()) {
-                if (!reader.SetSampleOffset(sampleOffset + (start ? 0 : bufferSize))) {
-                    break;
-                }
-                unique.unlock();
-                samples = reader.GetSamples(bufferSize, enable, mtx);
-                unique.lock();
-                if (samples.empty()) {
-                    break;
-                }
-                eof = samples.size() < bufferSize;
-                unique.unlock();
-                cv.notify_all();
-            } else {
-                unique.unlock();
+            if (!ctrl.samples.empty()) {
+                continue;
             }
-            start = false;
+            if (!reader.SetSampleOffset(ctrl.sampleOffset + (begin ? 0 : bufferSize))) {
+                break;
+            }
+            unique.unlock();
+            begin = false;
+            auto loaded = reader.GetSamples(bufferSize, *stop);
+            if (loaded.empty()) {
+                break;
+            }
+            unique.lock();
+            ctrl.samples = std::move(loaded);
+            unique.unlock();
+            ctrl.cv.notify_all();
         }
     } catch (...) {
         finally();
@@ -572,27 +577,32 @@ void Transmitter::TxViaCpu(WaveReader &reader, unsigned sampleRate, unsigned buf
     finally();
 }
 
-void Transmitter::CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, unsigned *sampleOffset, std::vector<Sample> *samples, bool *stop)
+void Transmitter::CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsigned divisorRange, void *buffer, std::atomic<bool> *exit)
 {
+    BufferCtrl *ctrl = reinterpret_cast<BufferCtrl *>(buffer);
+
     try {
         auto playbackStart = std::chrono::system_clock::now();
         std::chrono::system_clock::time_point current, start;
 
         while (true) {
+            bool exited = false;
             std::vector<Sample> loadedSamples;
-
-            std::unique_lock<std::mutex> unique(mtx);
-            cv.wait(unique, [&]() -> bool {
-                return !samples->empty() || *stop;
+            std::unique_lock<std::mutex> unique(ctrl->mtx);
+            ctrl->cv.wait_for(unique, TRANSMITTER_CTRL_INTERVAL, [&]() -> bool {
+                return !ctrl->samples.empty() || (exited = exit->load());
             });
-            if (*stop) {
+            if (exited) {
                 break;
             }
+            if (ctrl->samples.empty()) {
+                continue;
+            }
             start = current = std::chrono::system_clock::now();
-            *sampleOffset = std::chrono::duration_cast<std::chrono::microseconds>(current - playbackStart).count() * sampleRate / 1000000;
-            loadedSamples = std::move(*samples);
+            ctrl->sampleOffset = std::chrono::duration_cast<std::chrono::microseconds>(current - playbackStart).count() * sampleRate / 1000000;
+            loadedSamples = std::move(ctrl->samples);
             unique.unlock();
-            cv.notify_all();
+            ctrl->cv.notify_all();
 
             unsigned offset = 0;
 
@@ -611,9 +621,7 @@ void Transmitter::CpuTxThread(unsigned sampleRate, unsigned clockDivisor, unsign
             }
         }
     } catch (...) {
-        std::unique_lock<std::mutex> unique(mtx);
-        *stop = true;
-        unique.unlock();
-        cv.notify_all();
+        exit->store(true);
+        ctrl->cv.notify_all();
     }
 }
